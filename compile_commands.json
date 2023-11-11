@@ -1,0 +1,14 @@
+[
+    {
+        "arguments": [
+            "cc",
+            "-c",
+            "-I../linux-aws-6.2-6.2.0/usr/include",
+            "-o",
+            "getdelays",
+            "getdelays.c"
+        ],
+        "directory": "/home/ubuntu/getdelays-rs",
+        "file": "getdelays.c"
+    }
+]
