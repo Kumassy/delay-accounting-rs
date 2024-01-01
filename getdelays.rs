@@ -2,6 +2,8 @@
 #![feature(extern_types)]
 use ::c2rust_out::*;
 use netlink_sys::{Socket, protocols::NETLINK_GENERIC};
+use netlink_packet_core::{NetlinkMessage, NetLinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}};
+use netlink_packet_generic::{message::{GenlHeader, GenlMessage}, constants::GENL_HDRLEN};
 
 extern "C" {
     pub type _IO_wide_data;
@@ -433,6 +435,33 @@ unsafe extern "C" fn create_nl_socket(mut protocol: libc::c_int) -> libc::c_int 
     }
     close(fd);
     return -(1 as libc::c_int);
+}
+
+fn send_cmd_rs(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, genl_cmd: u8, payload: NetlinkPayload) {
+    let mut netlink_message = NetLinkMessage {
+        header: NetlinkHeader {
+            // length: (GENL_HDRLEN + 3) & !3,
+            message_type: nlmsg_type,
+            flags: NLM_F_REQUEST,
+            sequence_number: 0,
+            port_number: nlmsg_pid,
+            ..Default::default()
+        },
+        payload,
+    };
+
+    netlink_message.finalize();
+    let buf = netlink_message.as_slice();
+
+    let sent = 0;
+    while sent < buf.len() {
+        let r = socket.send_to(&buf[sent..], SocketAddr::new(0, 0), 0).unwrap();
+        if r > 0 {
+            sent += r;
+        } else {
+            panic!("send failed");
+        }
+    }
 }
 unsafe extern "C" fn send_cmd(
     mut sd: libc::c_int,
