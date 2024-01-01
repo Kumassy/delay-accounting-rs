@@ -18,3 +18,4 @@ path = "getdelays.rs"
 name = "getdelays"
 [dependencies]
 libc= "0.2"
+netlink-sys = "0.8.5"

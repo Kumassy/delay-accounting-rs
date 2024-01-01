@@ -1,6 +1,8 @@
 #![allow(dead_code, mutable_transmutes, non_camel_case_types, non_snake_case, non_upper_case_globals, unused_assignments, unused_mut)]
 #![feature(extern_types)]
 use ::c2rust_out::*;
+use netlink_sys::{Socket, protocols::NETLINK_GENERIC};
+
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -363,6 +365,17 @@ unsafe extern "C" fn usage() {
     fprintf(stderr, b"  -l: listen forever\n\0" as *const u8 as *const libc::c_char);
     fprintf(stderr, b"  -v: debug on\n\0" as *const u8 as *const libc::c_char);
     fprintf(stderr, b"  -C: container path\n\0" as *const u8 as *const libc::c_char);
+}
+
+fn create_nl_socket_rs() -> Socket {
+    let mut socket = Socket::new(NETLINK_GENERIC).unwrap();
+
+    // TODO: Set RCVBUF
+
+    let addr = socket.bind_auto().unwrap();
+    println!("socket port number = {}", addr.port_number());
+
+    socket
 }
 unsafe extern "C" fn create_nl_socket(mut protocol: libc::c_int) -> libc::c_int {
     let mut current_block: u64;
