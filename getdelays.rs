@@ -1,5 +1,7 @@
 #![allow(dead_code, mutable_transmutes, non_camel_case_types, non_snake_case, non_upper_case_globals, unused_assignments, unused_mut)]
 #![feature(extern_types)]
+use std::os::fd::AsRawFd;
+
 use ::c2rust_out::*;
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
@@ -442,14 +444,17 @@ fn send_cmd_rs<T: NetlinkSerializable>(socket: &Socket, nlmsg_type: u16, nlmsg_p
         NetlinkHeader::default(), payload
     );
     // TODO: netlink_message.header.length 
+    // netlink_message.header.length = 123;
     netlink_message.header.message_type = nlmsg_type;
     netlink_message.header.flags = NLM_F_REQUEST;
     netlink_message.header.sequence_number = 0;
     netlink_message.header.port_number = nlmsg_pid;
     netlink_message.finalize();
 
-    let mut buf = Vec::with_capacity(netlink_message.buffer_len());
+    let mut buf = vec![0u8; netlink_message.buffer_len()];
     netlink_message.serialize(&mut buf[..]);
+
+    println!("{:x?}", buf);
 
     let mut sent = 0;
     while sent < buf.len() {
@@ -596,12 +601,12 @@ fn get_family_id_rs(socket: &Socket) -> u16 {
         nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())]
     });
     genlmsg.finalize();
-    let r = send_cmd_rs(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg));
+    send_cmd_rs(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg));
 
-    let mut rxbuf = vec![0u8; 4096];
-    let rep_len = socket.recv(&mut rxbuf, 0).unwrap();
+    let mut rxbuf = vec![0; 4096];
+    let rep_len = socket.recv(&mut &mut rxbuf[..], 0).unwrap();
 
-    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf).unwrap();
+    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf[0..rep_len]).unwrap();
 
     let id = match msg.payload {
         NetlinkPayload::InnerMessage(genlmsg) => {
@@ -612,7 +617,7 @@ fn get_family_id_rs(socket: &Socket) -> u16 {
                         _ => None
                     }
                 }).unwrap();
-                println!("family_id = {}", family_id);
+                dbg!(family_id);
                 family_id
             } else {
                 panic!("unexpected response");
@@ -1048,16 +1053,19 @@ unsafe fn main_0(
             exit(1 as libc::c_int);
         }
     }
-    nl_sd = create_nl_socket(16 as libc::c_int);
-    if nl_sd < 0 as libc::c_int {
-        fprintf(
-            stderr,
-            b"error creating Netlink socket\n\0" as *const u8 as *const libc::c_char,
-        );
-        exit(1 as libc::c_int);
-    }
+    let socket = create_nl_socket_rs();
+    // nl_sd = create_nl_socket(16 as libc::c_int);
+    // if nl_sd < 0 as libc::c_int {
+    //     fprintf(
+    //         stderr,
+    //         b"error creating Netlink socket\n\0" as *const u8 as *const libc::c_char,
+    //     );
+    //     exit(1 as libc::c_int);
+    // }
+    nl_sd = socket.as_raw_fd();
     mypid = getpid() as __u32;
-    id = get_family_id(nl_sd) as __u16;
+    // id = get_family_id(nl_sd) as __u16;
+    id = get_family_id_rs(&socket);
     if id == 0 {
         fprintf(
             stderr,
