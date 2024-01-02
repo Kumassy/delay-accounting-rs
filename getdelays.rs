@@ -3,7 +3,7 @@
 use ::c2rust_out::*;
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
-use netlink_packet_generic::{constants::GENL_HDRLEN};
+use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
 
 extern "C" {
     pub type _IO_wide_data;
@@ -437,7 +437,7 @@ unsafe extern "C" fn create_nl_socket(mut protocol: libc::c_int) -> libc::c_int 
     return -(1 as libc::c_int);
 }
 
-fn send_cmd_rs<T: NetlinkSerializable>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, genl_cmd: u8, payload: NetlinkPayload<T>) {
+fn send_cmd_rs<T: NetlinkSerializable>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) {
     let mut netlink_message = NetlinkMessage::new(
         NetlinkHeader::default(), payload
     );
@@ -587,6 +587,46 @@ unsafe extern "C" fn send_cmd(
         }
     }
     return 0 as libc::c_int;
+}
+const TASKSTATS_GENL_NAME: &str = "TASKSTATS";
+
+fn get_family_id_rs(socket: &Socket) -> u16 {
+    let mut genlmsg = GenlMessage::from_payload(GenlCtrl {
+        cmd: GenlCtrlCmd::GetFamily,
+        nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())]
+    });
+    genlmsg.finalize();
+    let r = send_cmd_rs(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg));
+
+    let mut rxbuf = vec![0u8; 4096];
+    let rep_len = socket.recv(&mut rxbuf, 0).unwrap();
+
+    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf).unwrap();
+
+    let id = match msg.payload {
+        NetlinkPayload::InnerMessage(genlmsg) => {
+            if GenlCtrlCmd::NewFamily == genlmsg.payload.cmd {
+                let family_id = genlmsg.payload.nlas.iter().find_map(|nla| {
+                    match nla {
+                        GenlCtrlAttrs::FamilyId(id) => Some(*id),
+                        _ => None
+                    }
+                }).unwrap();
+                println!("family_id = {}", family_id);
+                family_id
+            } else {
+                panic!("unexpected response");
+            }
+        }
+        NetlinkPayload::Error(err) => {
+            panic!("Received a netlink error message: {err:?}");
+        }
+        _ => {
+            panic!("unexpected response");
+        }
+    };
+
+    id
 }
 unsafe extern "C" fn get_family_id(mut sd: libc::c_int) -> libc::c_int {
     let mut ans: C2RustUnnamed_7 = C2RustUnnamed_7 {
