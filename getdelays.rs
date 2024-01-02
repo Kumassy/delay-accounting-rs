@@ -1,9 +1,9 @@
 #![allow(dead_code, mutable_transmutes, non_camel_case_types, non_snake_case, non_upper_case_globals, unused_assignments, unused_mut)]
 #![feature(extern_types)]
 use ::c2rust_out::*;
-use netlink_sys::{Socket, protocols::NETLINK_GENERIC};
-use netlink_packet_core::{NetlinkMessage, NetLinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}};
-use netlink_packet_generic::{message::{GenlHeader, GenlMessage}, constants::GENL_HDRLEN};
+use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
+use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
+use netlink_packet_generic::{constants::GENL_HDRLEN};
 
 extern "C" {
     pub type _IO_wide_data;
@@ -437,25 +437,23 @@ unsafe extern "C" fn create_nl_socket(mut protocol: libc::c_int) -> libc::c_int 
     return -(1 as libc::c_int);
 }
 
-fn send_cmd_rs(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, genl_cmd: u8, payload: NetlinkPayload) {
-    let mut netlink_message = NetLinkMessage {
-        header: NetlinkHeader {
-            // length: (GENL_HDRLEN + 3) & !3,
-            message_type: nlmsg_type,
-            flags: NLM_F_REQUEST,
-            sequence_number: 0,
-            port_number: nlmsg_pid,
-            ..Default::default()
-        },
-        payload,
-    };
-
+fn send_cmd_rs<T: NetlinkSerializable>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, genl_cmd: u8, payload: NetlinkPayload<T>) {
+    let mut netlink_message = NetlinkMessage::new(
+        NetlinkHeader::default(), payload
+    );
+    // TODO: netlink_message.header.length 
+    netlink_message.header.message_type = nlmsg_type;
+    netlink_message.header.flags = NLM_F_REQUEST;
+    netlink_message.header.sequence_number = 0;
+    netlink_message.header.port_number = nlmsg_pid;
     netlink_message.finalize();
-    let buf = netlink_message.as_slice();
 
-    let sent = 0;
+    let mut buf = Vec::with_capacity(netlink_message.buffer_len());
+    netlink_message.serialize(&mut buf[..]);
+
+    let mut sent = 0;
     while sent < buf.len() {
-        let r = socket.send_to(&buf[sent..], SocketAddr::new(0, 0), 0).unwrap();
+        let r = socket.send_to(&buf[sent..], &SocketAddr::new(0, 0), 0).unwrap();
         if r > 0 {
             sent += r;
         } else {
