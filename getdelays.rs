@@ -1072,455 +1072,397 @@ unsafe fn main_0(
             b"Error getting family id, errno %d\n\0" as *const u8 as *const libc::c_char,
             *__errno_location(),
         );
-    } else {
+        panic!();
+    }
+
+    if dbg != 0 {
+        printf(
+            b"family id %d\n\0" as *const u8 as *const libc::c_char,
+            id as libc::c_int,
+        );
+    }
+
+    if tid != 0 && containerset != 0 {
+        fprintf(
+            stderr,
+            b"Select either -t or -C, not both\n\0" as *const u8
+                as *const libc::c_char,
+        );
+        panic!();
+    }
+    if tid != 0 && forking != 0 {
+        let mut sig_received: libc::c_int = 0;
+        sigwait(&mut sigset, &mut sig_received);
+    }
+    if tid != 0 {
+        rc = send_cmd(
+            nl_sd,
+            id,
+            mypid,
+            TASKSTATS_CMD_GET as libc::c_int as __u8,
+            cmd_type as __u16,
+            &mut tid as *mut pid_t as *mut libc::c_void,
+            ::core::mem::size_of::<__u32>() as libc::c_ulong
+                as libc::c_int,
+        );
         if dbg != 0 {
             printf(
-                b"family id %d\n\0" as *const u8 as *const libc::c_char,
-                id as libc::c_int,
+                b"Sent pid/tgid, retval %d\n\0" as *const u8
+                    as *const libc::c_char,
+                rc,
             );
         }
-        if maskset != 0 {
+        if rc < 0 as libc::c_int {
+            fprintf(
+                stderr,
+                b"error sending tid/tgid cmd\n\0" as *const u8
+                    as *const libc::c_char,
+            );
+            panic!();
+        }
+    }
+    if containerset != 0 {
+        cfd = open(containerpath, 0 as libc::c_int);
+        if cfd < 0 as libc::c_int {
+            perror(
+                b"error opening container file\0" as *const u8
+                    as *const libc::c_char,
+            );
+            panic!();
+        } else {
             rc = send_cmd(
                 nl_sd,
                 id,
                 mypid,
-                TASKSTATS_CMD_GET as libc::c_int as __u8,
-                TASKSTATS_CMD_ATTR_REGISTER_CPUMASK as libc::c_int as __u16,
-                &mut cpumask as *mut [libc::c_char; 292] as *mut libc::c_void,
-                (strlen(cpumask.as_mut_ptr()))
-                    .wrapping_add(1 as libc::c_int as libc::c_ulong) as libc::c_int,
+                CGROUPSTATS_CMD_GET as libc::c_int as __u8,
+                CGROUPSTATS_CMD_ATTR_FD as libc::c_int as __u16,
+                &mut cfd as *mut libc::c_int as *mut libc::c_void,
+                ::core::mem::size_of::<__u32>() as libc::c_ulong
+                    as libc::c_int,
             );
-            if dbg != 0 {
-                printf(
-                    b"Sent register cpumask, retval %d\n\0" as *const u8
-                        as *const libc::c_char,
-                    rc,
-                );
-            }
             if rc < 0 as libc::c_int {
-                fprintf(
-                    stderr,
-                    b"error sending register cpumask\n\0" as *const u8
+                perror(
+                    b"error sending cgroupstats command\0" as *const u8
                         as *const libc::c_char,
                 );
-                current_block = 16831393923422054882;
-            } else {
-                current_block = 16791665189521845338;
-            }
-        } else {
-            current_block = 16791665189521845338;
-        }
-        match current_block {
-            16831393923422054882 => {}
-            _ => {
-                if tid != 0 && containerset != 0 {
-                    fprintf(
-                        stderr,
-                        b"Select either -t or -C, not both\n\0" as *const u8
-                            as *const libc::c_char,
-                    );
-                } else {
-                    if tid != 0 && forking != 0 {
-                        let mut sig_received: libc::c_int = 0;
-                        sigwait(&mut sigset, &mut sig_received);
-                    }
-                    if tid != 0 {
-                        rc = send_cmd(
-                            nl_sd,
-                            id,
-                            mypid,
-                            TASKSTATS_CMD_GET as libc::c_int as __u8,
-                            cmd_type as __u16,
-                            &mut tid as *mut pid_t as *mut libc::c_void,
-                            ::core::mem::size_of::<__u32>() as libc::c_ulong
-                                as libc::c_int,
-                        );
-                        if dbg != 0 {
-                            printf(
-                                b"Sent pid/tgid, retval %d\n\0" as *const u8
-                                    as *const libc::c_char,
-                                rc,
-                            );
-                        }
-                        if rc < 0 as libc::c_int {
-                            fprintf(
-                                stderr,
-                                b"error sending tid/tgid cmd\n\0" as *const u8
-                                    as *const libc::c_char,
-                            );
-                            current_block = 6109666272876517348;
-                        } else {
-                            current_block = 13003737910779602957;
-                        }
-                    } else {
-                        current_block = 13003737910779602957;
-                    }
-                    match current_block {
-                        13003737910779602957 => {
-                            if containerset != 0 {
-                                cfd = open(containerpath, 0 as libc::c_int);
-                                if cfd < 0 as libc::c_int {
-                                    perror(
-                                        b"error opening container file\0" as *const u8
-                                            as *const libc::c_char,
-                                    );
-                                    current_block = 16831393923422054882;
-                                } else {
-                                    rc = send_cmd(
-                                        nl_sd,
-                                        id,
-                                        mypid,
-                                        CGROUPSTATS_CMD_GET as libc::c_int as __u8,
-                                        CGROUPSTATS_CMD_ATTR_FD as libc::c_int as __u16,
-                                        &mut cfd as *mut libc::c_int as *mut libc::c_void,
-                                        ::core::mem::size_of::<__u32>() as libc::c_ulong
-                                            as libc::c_int,
-                                    );
-                                    if rc < 0 as libc::c_int {
-                                        perror(
-                                            b"error sending cgroupstats command\0" as *const u8
-                                                as *const libc::c_char,
-                                        );
-                                        current_block = 16831393923422054882;
-                                    } else {
-                                        current_block = 4983594971376015098;
-                                    }
-                                }
-                            } else {
-                                current_block = 4983594971376015098;
-                            }
-                            match current_block {
-                                16831393923422054882 => {}
-                                _ => {
-                                    if maskset == 0 && tid == 0 && containerset == 0 {
-                                        usage();
-                                        current_block = 16831393923422054882;
-                                    } else {
-                                        's_556: loop {
-                                            rep_len = recv(
-                                                nl_sd,
-                                                &mut msg as *mut msgtemplate as *mut libc::c_void,
-                                                ::core::mem::size_of::<msgtemplate>() as libc::c_ulong,
-                                                0 as libc::c_int,
-                                            ) as libc::c_int;
-                                            if dbg != 0 {
-                                                printf(
-                                                    b"received %d bytes\n\0" as *const u8
-                                                        as *const libc::c_char,
-                                                    rep_len,
-                                                );
-                                            }
-                                            if rep_len < 0 as libc::c_int {
-                                                fprintf(
-                                                    stderr,
-                                                    b"nonfatal reply error: errno %d\n\0" as *const u8
-                                                        as *const libc::c_char,
-                                                    *__errno_location(),
-                                                );
-                                            } else if msg.n.nlmsg_type as libc::c_int
-                                                == 0x2 as libc::c_int
-                                                || !(rep_len
-                                                    >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
-                                                        as libc::c_int
-                                                    && msg.n.nlmsg_len as libc::c_ulong
-                                                        >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
-                                                    && msg.n.nlmsg_len <= rep_len as libc::c_uint)
-                                            {
-                                                let mut err: *mut nlmsgerr = (&mut msg as *mut msgtemplate
-                                                    as *mut libc::c_char)
-                                                    .offset(
-                                                        ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                                                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                            & !(4 as libc::c_uint)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                as libc::c_ulong) as libc::c_int as isize,
-                                                    ) as *mut libc::c_void as *mut nlmsgerr;
-                                                fprintf(
-                                                    stderr,
-                                                    b"fatal reply error,  errno %d\n\0" as *const u8
-                                                        as *const libc::c_char,
-                                                    (*err).error,
-                                                );
-                                                break;
-                                            } else {
-                                                if dbg != 0 {
-                                                    printf(
-                                                        b"nlmsghdr size=%zu, nlmsg_len=%d, rep_len=%d\n\0"
-                                                            as *const u8 as *const libc::c_char,
-                                                        ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong,
-                                                        msg.n.nlmsg_len,
-                                                        rep_len,
-                                                    );
-                                                }
-                                                rep_len = ((msg.n.nlmsg_len)
-                                                    .wrapping_sub(
-                                                        ((0 as libc::c_int
-                                                            + ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                                                                .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                & !(4 as libc::c_uint)
-                                                                    .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                    as libc::c_ulong) as libc::c_int) as libc::c_uint)
-                                                            .wrapping_add(4 as libc::c_uint)
-                                                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                            & !(4 as libc::c_uint)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_uint),
-                                                    ) as libc::c_ulong)
-                                                    .wrapping_sub(
-                                                        (::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                                                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                            & !(4 as libc::c_uint)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                as libc::c_ulong,
-                                                    ) as libc::c_int;
-                                                na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
-                                                    .offset(
-                                                        ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                                                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                            & !(4 as libc::c_uint)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                as libc::c_ulong) as libc::c_int as isize,
-                                                    ) as *mut libc::c_void)
-                                                    .offset(
-                                                        ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                                                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                            & !(4 as libc::c_uint)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                as libc::c_ulong) as isize,
-                                                    ) as *mut nlattr;
-                                                len = 0 as libc::c_int;
-                                                while len < rep_len {
-                                                    len
-                                                        += (*na).nla_len as libc::c_int + 4 as libc::c_int
-                                                            - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
-                                                    match (*na).nla_type as libc::c_int {
-                                                        5 | 4 => {
-                                                            aggr_len = (*na).nla_len as libc::c_int
-                                                                - ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                    .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                    .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                    & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                    as libc::c_int;
-                                                            len2 = 0 as libc::c_int;
-                                                            na = (na as *mut libc::c_char)
-                                                                .offset(
-                                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                        as libc::c_int as isize,
-                                                                ) as *mut libc::c_void as *mut nlattr;
-                                                            while len2 < aggr_len {
-                                                                match (*na).nla_type as libc::c_int {
-                                                                    1 => {
-                                                                        rtid = *((na as *mut libc::c_char)
-                                                                            .offset(
-                                                                                ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                    .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                    .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                    & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                    as libc::c_int as isize,
-                                                                            ) as *mut libc::c_void as *mut libc::c_int);
-                                                                        if print_delays != 0 {
-                                                                            printf(
-                                                                                b"PID\t%d\n\0" as *const u8 as *const libc::c_char,
-                                                                                rtid,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    2 => {
-                                                                        rtid = *((na as *mut libc::c_char)
-                                                                            .offset(
-                                                                                ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                    .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                    .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                    & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                    as libc::c_int as isize,
-                                                                            ) as *mut libc::c_void as *mut libc::c_int);
-                                                                        if print_delays != 0 {
-                                                                            printf(
-                                                                                b"TGID\t%d\n\0" as *const u8 as *const libc::c_char,
-                                                                                rtid,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    3 => {
-                                                                        if print_delays != 0 {
-                                                                            print_delayacct(
-                                                                                (na as *mut libc::c_char)
-                                                                                    .offset(
-                                                                                        ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                            .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                            & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                            as libc::c_int as isize,
-                                                                                    ) as *mut libc::c_void as *mut taskstats,
-                                                                            );
-                                                                        }
-                                                                        if print_io_accounting != 0 {
-                                                                            print_ioacct(
-                                                                                (na as *mut libc::c_char)
-                                                                                    .offset(
-                                                                                        ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                            .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                            & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                            as libc::c_int as isize,
-                                                                                    ) as *mut libc::c_void as *mut taskstats,
-                                                                            );
-                                                                        }
-                                                                        if print_task_context_switch_counts != 0 {
-                                                                            task_context_switch_counts(
-                                                                                (na as *mut libc::c_char)
-                                                                                    .offset(
-                                                                                        ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                            .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                            & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                            as libc::c_int as isize,
-                                                                                    ) as *mut libc::c_void as *mut taskstats,
-                                                                            );
-                                                                        }
-                                                                        if fd != 0 {
-                                                                            if write(
-                                                                                fd,
-                                                                                (na as *mut libc::c_char)
-                                                                                    .offset(
-                                                                                        ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                                            .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                                            & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                                            as libc::c_int as isize,
-                                                                                    ) as *mut libc::c_void,
-                                                                                (*na).nla_len as size_t,
-                                                                            ) < 0 as libc::c_int as libc::c_long
-                                                                            {
-                                                                                fprintf(
-                                                                                    stderr,
-                                                                                    b"write error\n\0" as *const u8 as *const libc::c_char,
-                                                                                );
-                                                                                exit(1 as libc::c_int);
-                                                                            }
-                                                                        }
-                                                                        if loop_0 == 0 {
-                                                                            break 's_556;
-                                                                        }
-                                                                    }
-                                                                    6 => {}
-                                                                    _ => {
-                                                                        fprintf(
-                                                                            stderr,
-                                                                            b"Unknown nested nla_type %d\n\0" as *const u8
-                                                                                as *const libc::c_char,
-                                                                            (*na).nla_type as libc::c_int,
-                                                                        );
-                                                                    }
-                                                                }
-                                                                len2
-                                                                    += (*na).nla_len as libc::c_int + 4 as libc::c_int
-                                                                        - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
-                                                                na = (na as *mut libc::c_char)
-                                                                    .offset(
-                                                                        ((*na).nla_len as libc::c_int + 4 as libc::c_int
-                                                                            - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int))
-                                                                            as isize,
-                                                                    ) as *mut nlattr;
-                                                            }
-                                                        }
-                                                        1 => {
-                                                            print_cgroupstats(
-                                                                (na as *mut libc::c_char)
-                                                                    .offset(
-                                                                        ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                                            .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                            & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                                            as libc::c_int as isize,
-                                                                    ) as *mut libc::c_void as *mut cgroupstats,
-                                                            );
-                                                        }
-                                                        6 => {}
-                                                        _ => {
-                                                            fprintf(
-                                                                stderr,
-                                                                b"Unknown nla_type %d\n\0" as *const u8
-                                                                    as *const libc::c_char,
-                                                                (*na).nla_type as libc::c_int,
-                                                            );
-                                                        }
-                                                    }
-                                                    na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
-                                                        .offset(
-                                                            ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                                                                .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                & !(4 as libc::c_uint)
-                                                                    .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                    as libc::c_ulong) as libc::c_int as isize,
-                                                        ) as *mut libc::c_void)
-                                                        .offset(
-                                                            ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                                                                .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                                & !(4 as libc::c_uint)
-                                                                    .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                                                    as libc::c_ulong) as isize,
-                                                        )
-                                                        .offset(len as isize) as *mut nlattr;
-                                                }
-                                            }
-                                            if !(loop_0 != 0) {
-                                                break;
-                                            }
-                                        }
-                                        current_block = 6109666272876517348;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                    match current_block {
-                        16831393923422054882 => {}
-                        _ => {
-                            if maskset != 0 {
-                                rc = send_cmd(
-                                    nl_sd,
-                                    id,
-                                    mypid,
-                                    TASKSTATS_CMD_GET as libc::c_int as __u8,
-                                    TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK as libc::c_int
-                                        as __u16,
-                                    &mut cpumask as *mut [libc::c_char; 292]
-                                        as *mut libc::c_void,
-                                    (strlen(cpumask.as_mut_ptr()))
-                                        .wrapping_add(1 as libc::c_int as libc::c_ulong)
-                                        as libc::c_int,
-                                );
-                                printf(
-                                    b"Sent deregister mask, retval %d\n\0" as *const u8
-                                        as *const libc::c_char,
-                                    rc,
-                                );
-                                if rc < 0 as libc::c_int {
-                                    fprintf(
-                                        stderr,
-                                        b"error sending deregister cpumask\n\0" as *const u8
-                                            as *const libc::c_char,
-                                    );
-                                    exit(rc);
-                                }
-                            }
-                        }
-                    }
-                }
+                panic!();
             }
         }
     }
+    if maskset == 0 && tid == 0 && containerset == 0 {
+        usage();
+        panic!();
+    }
+    's_556: loop {
+        rep_len = recv(
+            nl_sd,
+            &mut msg as *mut msgtemplate as *mut libc::c_void,
+            ::core::mem::size_of::<msgtemplate>() as libc::c_ulong,
+            0 as libc::c_int,
+        ) as libc::c_int;
+        if dbg != 0 {
+            printf(
+                b"received %d bytes\n\0" as *const u8
+                    as *const libc::c_char,
+                rep_len,
+            );
+        }
+        if rep_len < 0 as libc::c_int {
+            fprintf(
+                stderr,
+                b"nonfatal reply error: errno %d\n\0" as *const u8
+                    as *const libc::c_char,
+                *__errno_location(),
+            );
+        } else if msg.n.nlmsg_type as libc::c_int
+            == 0x2 as libc::c_int
+            || !(rep_len
+                >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
+                    as libc::c_int
+                && msg.n.nlmsg_len as libc::c_ulong
+                    >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
+                && msg.n.nlmsg_len <= rep_len as libc::c_uint)
+        {
+            let mut err: *mut nlmsgerr = (&mut msg as *mut msgtemplate
+                as *mut libc::c_char)
+                .offset(
+                    ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                        & !(4 as libc::c_uint)
+                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                            as libc::c_ulong) as libc::c_int as isize,
+                ) as *mut libc::c_void as *mut nlmsgerr;
+            fprintf(
+                stderr,
+                b"fatal reply error,  errno %d\n\0" as *const u8
+                    as *const libc::c_char,
+                (*err).error,
+            );
+            break;
+        } else {
+            if dbg != 0 {
+                printf(
+                    b"nlmsghdr size=%zu, nlmsg_len=%d, rep_len=%d\n\0"
+                        as *const u8 as *const libc::c_char,
+                    ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong,
+                    msg.n.nlmsg_len,
+                    rep_len,
+                );
+            }
+            rep_len = ((msg.n.nlmsg_len)
+                .wrapping_sub(
+                    ((0 as libc::c_int
+                        + ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                            & !(4 as libc::c_uint)
+                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                                as libc::c_ulong) as libc::c_int) as libc::c_uint)
+                        .wrapping_add(4 as libc::c_uint)
+                        .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                        & !(4 as libc::c_uint)
+                            .wrapping_sub(1 as libc::c_int as libc::c_uint),
+                ) as libc::c_ulong)
+                .wrapping_sub(
+                    (::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                        & !(4 as libc::c_uint)
+                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                            as libc::c_ulong,
+                ) as libc::c_int;
+            na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
+                .offset(
+                    ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                        & !(4 as libc::c_uint)
+                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                            as libc::c_ulong) as libc::c_int as isize,
+                ) as *mut libc::c_void)
+                .offset(
+                    ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                        & !(4 as libc::c_uint)
+                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                            as libc::c_ulong) as isize,
+                ) as *mut nlattr;
+            len = 0 as libc::c_int;
+            while len < rep_len {
+                len
+                    += (*na).nla_len as libc::c_int + 4 as libc::c_int
+                        - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
+                match (*na).nla_type as libc::c_int {
+                    5 | 4 => {
+                        aggr_len = (*na).nla_len as libc::c_int
+                            - ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                as libc::c_int;
+                        len2 = 0 as libc::c_int;
+                        na = (na as *mut libc::c_char)
+                            .offset(
+                                ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                    .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                    .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                    & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                    as libc::c_int as isize,
+                            ) as *mut libc::c_void as *mut nlattr;
+                        while len2 < aggr_len {
+                            match (*na).nla_type as libc::c_int {
+                                1 => {
+                                    rtid = *((na as *mut libc::c_char)
+                                        .offset(
+                                            ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                as libc::c_int as isize,
+                                        ) as *mut libc::c_void as *mut libc::c_int);
+                                    if print_delays != 0 {
+                                        printf(
+                                            b"PID\t%d\n\0" as *const u8 as *const libc::c_char,
+                                            rtid,
+                                        );
+                                    }
+                                }
+                                2 => {
+                                    rtid = *((na as *mut libc::c_char)
+                                        .offset(
+                                            ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                as libc::c_int as isize,
+                                        ) as *mut libc::c_void as *mut libc::c_int);
+                                    if print_delays != 0 {
+                                        printf(
+                                            b"TGID\t%d\n\0" as *const u8 as *const libc::c_char,
+                                            rtid,
+                                        );
+                                    }
+                                }
+                                3 => {
+                                    if print_delays != 0 {
+                                        print_delayacct(
+                                            (na as *mut libc::c_char)
+                                                .offset(
+                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                        as libc::c_int as isize,
+                                                ) as *mut libc::c_void as *mut taskstats,
+                                        );
+                                    }
+                                    if print_io_accounting != 0 {
+                                        print_ioacct(
+                                            (na as *mut libc::c_char)
+                                                .offset(
+                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                        as libc::c_int as isize,
+                                                ) as *mut libc::c_void as *mut taskstats,
+                                        );
+                                    }
+                                    if print_task_context_switch_counts != 0 {
+                                        task_context_switch_counts(
+                                            (na as *mut libc::c_char)
+                                                .offset(
+                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                        as libc::c_int as isize,
+                                                ) as *mut libc::c_void as *mut taskstats,
+                                        );
+                                    }
+                                    if fd != 0 {
+                                        if write(
+                                            fd,
+                                            (na as *mut libc::c_char)
+                                                .offset(
+                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                                        as libc::c_int as isize,
+                                                ) as *mut libc::c_void,
+                                            (*na).nla_len as size_t,
+                                        ) < 0 as libc::c_int as libc::c_long
+                                        {
+                                            fprintf(
+                                                stderr,
+                                                b"write error\n\0" as *const u8 as *const libc::c_char,
+                                            );
+                                            exit(1 as libc::c_int);
+                                        }
+                                    }
+                                    if loop_0 == 0 {
+                                        break 's_556;
+                                    }
+                                }
+                                6 => {}
+                                _ => {
+                                    fprintf(
+                                        stderr,
+                                        b"Unknown nested nla_type %d\n\0" as *const u8
+                                            as *const libc::c_char,
+                                        (*na).nla_type as libc::c_int,
+                                    );
+                                }
+                            }
+                            len2
+                                += (*na).nla_len as libc::c_int + 4 as libc::c_int
+                                    - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
+                            na = (na as *mut libc::c_char)
+                                .offset(
+                                    ((*na).nla_len as libc::c_int + 4 as libc::c_int
+                                        - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int))
+                                        as isize,
+                                ) as *mut nlattr;
+                        }
+                    }
+                    1 => {
+                        print_cgroupstats(
+                            (na as *mut libc::c_char)
+                                .offset(
+                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
+                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+                                        as libc::c_int as isize,
+                                ) as *mut libc::c_void as *mut cgroupstats,
+                        );
+                    }
+                    6 => {}
+                    _ => {
+                        fprintf(
+                            stderr,
+                            b"Unknown nla_type %d\n\0" as *const u8
+                                as *const libc::c_char,
+                            (*na).nla_type as libc::c_int,
+                        );
+                    }
+                }
+                na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
+                    .offset(
+                        ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                            & !(4 as libc::c_uint)
+                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                                as libc::c_ulong) as libc::c_int as isize,
+                    ) as *mut libc::c_void)
+                    .offset(
+                        ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+                            & !(4 as libc::c_uint)
+                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
+                                as libc::c_ulong) as isize,
+                    )
+                    .offset(len as isize) as *mut nlattr;
+            }
+        }
+        if !(loop_0 != 0) {
+            break;
+        }
+    }
+    if maskset != 0 {
+        rc = send_cmd(
+            nl_sd,
+            id,
+            mypid,
+            TASKSTATS_CMD_GET as libc::c_int as __u8,
+            TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK as libc::c_int
+                as __u16,
+            &mut cpumask as *mut [libc::c_char; 292]
+                as *mut libc::c_void,
+            (strlen(cpumask.as_mut_ptr()))
+                .wrapping_add(1 as libc::c_int as libc::c_ulong)
+                as libc::c_int,
+        );
+        printf(
+            b"Sent deregister mask, retval %d\n\0" as *const u8
+                as *const libc::c_char,
+            rc,
+        );
+        if rc < 0 as libc::c_int {
+            fprintf(
+                stderr,
+                b"error sending deregister cpumask\n\0" as *const u8
+                    as *const libc::c_char,
+            );
+            exit(rc);
+        }
+    }
+    
     close(nl_sd);
     if fd != 0 {
         close(fd);
