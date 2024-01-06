@@ -442,7 +442,7 @@ unsafe extern "C" fn create_nl_socket(mut protocol: libc::c_int) -> libc::c_int 
     return -(1 as libc::c_int);
 }
 
-fn send_cmd_rs<T: NetlinkSerializable>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) {
+fn send_cmd_rs<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) {
     let mut netlink_message = NetlinkMessage::new(
         NetlinkHeader::default(), payload
     );
@@ -1098,16 +1098,15 @@ unsafe fn main_0(
         sigwait(&mut sigset, &mut sig_received);
     }
     if tid != 0 {
-        rc = send_cmd(
-            nl_sd,
-            id,
-            mypid,
-            TASKSTATS_CMD_GET as libc::c_int as __u8,
-            cmd_type as __u16,
-            &mut tid as *mut pid_t as *mut libc::c_void,
-            ::core::mem::size_of::<__u32>() as libc::c_ulong
-                as libc::c_int,
-        );
+        let mut genlmsg = GenlMessage::from_payload(TaskstatsCtrl {
+            cmd: TaskstatsCmd::Get,
+            nlas: vec![TaskstatsCmdAttrs::Pid(tid as u32)]
+        });
+        genlmsg.set_resolved_family_id(id);
+        genlmsg.finalize();
+        send_cmd_rs(&socket, id, std::process::id(), NetlinkPayload::from(genlmsg));
+        rc = 0;
+
         if dbg != 0 {
             printf(
                 b"Sent pid/tgid, retval %d\n\0" as *const u8
