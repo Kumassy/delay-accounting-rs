@@ -7,6 +7,9 @@ use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
 use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
 
+mod taskstats_packet;
+use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
+
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
