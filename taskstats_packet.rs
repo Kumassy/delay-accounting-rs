@@ -205,25 +205,13 @@ pub enum TaskstatsTypeAttrs {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-// #[repr(align(8), transparent)]
-pub struct AlignedU64(u64);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-#[repr(align(8))]
-pub struct AlignedU32(u32);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-#[repr(align(8))]
-pub struct AlignedU8(u8);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 pub struct Taskstats {
     pub version: u16,
     pub ac_exitcode: u32,
     pub ac_flag: u8,
     pub ac_nice: u8,
-    pub cpu_count: AlignedU64,
+    pub cpu_count: u64,
     // pub cpu_count: u64,
     pub cpu_delay_total: u64,
     pub blkio_count: u64,
@@ -233,16 +221,17 @@ pub struct Taskstats {
     pub cpu_run_real_total: u64,
     pub cpu_run_virtual_total: u64,
     pub ac_comm: [u8; 32], // TS_COMMON_LEN
-    pub ac_sched: AlignedU8,
+    pub ac_sched: u8,
     // pub ac_sched: u8,
     pub ac_pad: [u8; 3],
-    pub ac_uid: AlignedU32,
+    __pad: [u8; 4],
+    pub ac_uid: u32,
     // pub ac_uid: u32,
     pub ac_gid: u32,
     pub ac_pid: u32,
     pub ac_ppid: u32,
     pub ac_btime: u32,
-    pub ac_etime: AlignedU64,
+    pub ac_etime: u64,
     // pub ac_etime: u64,
     pub ac_utime: u64,
     pub ac_stime: u64,
