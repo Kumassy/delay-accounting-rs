@@ -10,7 +10,7 @@ use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage
 mod taskstats_packet;
 use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 
-use crate::taskstats_packet::Taskstats;
+use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
 
 extern "C" {
     pub type _IO_wide_data;
@@ -1184,7 +1184,7 @@ unsafe fn main_0(
         }
 
         println!("{:x?}", &rxbuf[0..(rep_len as usize)]);
-        let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
+        let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
         dbg!(response);
         if rep_len < 0 as libc::c_int {
             fprintf(

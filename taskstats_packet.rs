@@ -48,15 +48,15 @@ impl TryFrom<u8> for TaskstatsCmd {
 
 /// Payload of taskstats controller
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TaskstatsCtrl {
+pub struct TaskstatsCtrl<T> {
     /// Command code of this message
     pub cmd: TaskstatsCmd,
     /// Netlink attributes in this message
-    pub nlas: Vec<TaskstatsCmdAttrs>,
+    pub nlas: Vec<T>,
 }
 
 
-impl GenlFamily for TaskstatsCtrl {
+impl<T> GenlFamily for TaskstatsCtrl<T> {
     fn family_name() -> &'static str {
         "TASKSTATS"
     }
@@ -71,7 +71,7 @@ impl GenlFamily for TaskstatsCtrl {
 }
 
 
-impl Emitable for TaskstatsCtrl {
+impl<T: Nla> Emitable for TaskstatsCtrl<T> {
     fn emit(&self, buffer: &mut [u8]) {
         self.nlas.as_slice().emit(buffer)
     }
@@ -82,25 +82,44 @@ impl Emitable for TaskstatsCtrl {
 }
 
 
-impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl {
+impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl<TaskstatsCmdAttrs> {
     fn parse_with_param(
         buf: &[u8],
         header: GenlHeader,
     ) -> Result<Self, DecodeError> {
         Ok(Self {
             cmd: header.cmd.try_into()?,
-            nlas: parse_ctrlnlas(buf)?,
+            nlas: parse_cmd_attrs(buf)?,
+        })
+    }
+}
+
+impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl<TaskstatsTypeAttrs> {
+    fn parse_with_param(
+        buf: &[u8],
+        header: GenlHeader,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            cmd: header.cmd.try_into()?,
+            nlas: parse_type_attrs(buf)?,
         })
     }
 }
 
 
-fn parse_ctrlnlas(buf: &[u8]) -> Result<Vec<TaskstatsCmdAttrs>, DecodeError> {
+fn parse_cmd_attrs(buf: &[u8]) -> Result<Vec<TaskstatsCmdAttrs>, DecodeError> {
     let nlas = NlasIterator::new(buf)
         .map(|nla| nla.and_then(|nla| TaskstatsCmdAttrs::parse(&nla)))
         .collect::<Result<Vec<_>, _>>()
         .context("failed to parse control message attributes")?;
+    Ok(nlas)
+}
 
+fn parse_type_attrs(buf: &[u8]) -> Result<Vec<TaskstatsTypeAttrs>, DecodeError> {
+    let nlas = NlasIterator::new(buf)
+        .map(|nla| nla.and_then(|nla| TaskstatsTypeAttrs::parse(&nla)))
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to parse control message attributes")?;
     Ok(nlas)
 }
 
