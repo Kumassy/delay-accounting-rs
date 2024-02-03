@@ -11,6 +11,7 @@ mod taskstats_packet;
 use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 
 use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
+use log::{debug, info, warn, error};
 
 extern "C" {
     pub type _IO_wide_data;
@@ -459,7 +460,6 @@ fn send_cmd_rs<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_
     let mut buf = vec![0u8; netlink_message.buffer_len()];
     netlink_message.serialize(&mut buf[..]);
 
-    println!("{:x?}", buf);
 
     let mut sent = 0;
     while sent < buf.len() {
@@ -720,6 +720,100 @@ unsafe extern "C" fn get_family_id(mut sd: libc::c_int) -> libc::c_int {
     }
     return id;
 }
+
+fn average_ms_f64(total: u64, count: u64) -> f64 {
+    total as f64 / 1000000.0 / (
+        if count != 0 {
+            count
+        } else {
+            1
+        }
+    ) as f64
+}
+fn average_ms_u64(total: u64, count: u64) -> u64 {
+    total / 1000000 / (
+        if count != 0 {
+            count
+        } else {
+            1
+        }
+    )
+}
+
+fn print_delayacct_rs(t: &Taskstats) {
+    println!(
+        "CPU   {:>15}{:>15}{:>15}{:>15}{:>15}",
+        "count", "real total", "virtual total", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}{:>15}{:>15.3}ms",
+        t.cpu_count,
+        t.cpu_run_real_total,
+        t.cpu_run_virtual_total,
+        t.cpu_delay_total,
+        average_ms_f64(t.cpu_delay_total, t.cpu_count)
+    );
+    println!(
+        "IO    {:>15}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.blkio_count,
+        t.blkio_delay_total,
+        average_ms_u64(t.blkio_delay_total, t.blkio_count)
+    );
+    println!(
+        "SWAP  {:>15}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.swapin_count,
+        t.swapin_delay_total,
+        average_ms_u64(t.swapin_delay_total, t.swapin_count)
+    );
+    println!(
+        "RECLAIM  {:>12}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.freepages_count,
+        t.freepages_delay_total,
+        average_ms_u64(t.freepages_delay_total, t.freepages_count)
+    );
+    println!(
+        "THRASHING{:>12}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.thrashing_count,
+        t.thrashing_delay_total,
+        average_ms_u64(t.thrashing_delay_total, t.thrashing_count)
+    );
+    println!(
+        "COMPACT  {:>12}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.compact_count,
+        t.compact_delay_total,
+        average_ms_u64(t.compact_delay_total, t.compact_count)
+    );
+    println!(
+        "WPCOPY   {:>12}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.wpcopy_count,
+        t.wpcopy_delay_total,
+        average_ms_u64(t.wpcopy_delay_total, t.wpcopy_count)
+    );
+}
 unsafe extern "C" fn print_delayacct(mut t: *mut taskstats) {
     printf(
         b"\n\nCPU   %15s%15s%15s%15s%15s\n      %15llu%15llu%15llu%15llu%15.3fms\nIO    %15s%15s%15s\n      %15llu%15llu%15llums\nSWAP  %15s%15s%15s\n      %15llu%15llu%15llums\nRECLAIM  %12s%15s%15s\n      %15llu%15llu%15llums\nTHRASHING%12s%15s%15s\n      %15llu%15llu%15llums\nCOMPACT  %12s%15s%15s\n      %15llu%15llu%15llums\nWPCOPY   %12s%15s%15s\n      %15llu%15llu%15llums\n\0"
@@ -826,6 +920,17 @@ unsafe extern "C" fn print_delayacct(mut t: *mut taskstats) {
             ),
     );
 }
+
+fn task_context_switch_counts_rs(t: &Taskstats) {
+    println!(
+        "\n\nTask   {:>15}{:>15}",
+        "voluntary", "nonvoluntary"
+    );
+    println!(
+        "       {:>15}{:>15}",
+        t.nvcsw, t.nivcsw
+    );
+}
 unsafe extern "C" fn task_context_switch_counts(mut t: *mut taskstats) {
     printf(
         b"\n\nTask   %15s%15s\n       %15llu%15llu\n\0" as *const u8
@@ -845,6 +950,13 @@ unsafe extern "C" fn print_cgroupstats(mut c: *mut cgroupstats) {
         (*c).nr_running,
         (*c).nr_stopped,
         (*c).nr_uninterruptible,
+    );
+}
+fn print_ioacct_rs(t: &Taskstats) {
+    println!(
+        "{}: read={} write={} cancelled_write={}",
+        String::from_utf8_lossy(&t.ac_comm),
+        t.read_bytes, t.write_bytes, t.cancelled_write_bytes
     );
 }
 unsafe extern "C" fn print_ioacct(mut t: *mut taskstats) {
@@ -1183,272 +1295,342 @@ unsafe fn main_0(
             );
         }
 
-        println!("{:x?}", &rxbuf[0..(rep_len as usize)]);
-        let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
-        dbg!(response);
-        if rep_len < 0 as libc::c_int {
-            fprintf(
-                stderr,
-                b"nonfatal reply error: errno %d\n\0" as *const u8
-                    as *const libc::c_char,
-                *__errno_location(),
-            );
-        } else if msg.n.nlmsg_type as libc::c_int
-            == 0x2 as libc::c_int
-            || !(rep_len
-                >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
-                    as libc::c_int
-                && msg.n.nlmsg_len as libc::c_ulong
-                    >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
-                && msg.n.nlmsg_len <= rep_len as libc::c_uint)
-        {
-            let mut err: *mut nlmsgerr = (&mut msg as *mut msgtemplate
-                as *mut libc::c_char)
-                .offset(
-                    ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                        & !(4 as libc::c_uint)
-                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                            as libc::c_ulong) as libc::c_int as isize,
-                ) as *mut libc::c_void as *mut nlmsgerr;
-            fprintf(
-                stderr,
-                b"fatal reply error,  errno %d\n\0" as *const u8
-                    as *const libc::c_char,
-                (*err).error,
-            );
-            break;
-        } else {
-            if dbg != 0 {
-                printf(
-                    b"nlmsghdr size=%zu, nlmsg_len=%d, rep_len=%d\n\0"
-                        as *const u8 as *const libc::c_char,
-                    ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong,
-                    msg.n.nlmsg_len,
-                    rep_len,
-                );
-            }
-            rep_len = ((msg.n.nlmsg_len)
-                .wrapping_sub(
-                    ((0 as libc::c_int
-                        + ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                            & !(4 as libc::c_uint)
-                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                as libc::c_ulong) as libc::c_int) as libc::c_uint)
-                        .wrapping_add(4 as libc::c_uint)
-                        .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                        & !(4 as libc::c_uint)
-                            .wrapping_sub(1 as libc::c_int as libc::c_uint),
-                ) as libc::c_ulong)
-                .wrapping_sub(
-                    (::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                        & !(4 as libc::c_uint)
-                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                            as libc::c_ulong,
-                ) as libc::c_int;
-            na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
-                .offset(
-                    ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                        & !(4 as libc::c_uint)
-                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                            as libc::c_ulong) as libc::c_int as isize,
-                ) as *mut libc::c_void)
-                .offset(
-                    ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                        .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                        & !(4 as libc::c_uint)
-                            .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                            as libc::c_ulong) as isize,
-                ) as *mut nlattr;
-            len = 0 as libc::c_int;
-            while len < rep_len {
-                len
-                    += (*na).nla_len as libc::c_int + 4 as libc::c_int
-                        - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
-                match (*na).nla_type as libc::c_int {
-                    5 | 4 => {
-                        aggr_len = (*na).nla_len as libc::c_int
-                            - ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                as libc::c_int;
-                        len2 = 0 as libc::c_int;
-                        na = (na as *mut libc::c_char)
-                            .offset(
-                                ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                    .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                    .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                    & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                    as libc::c_int as isize,
-                            ) as *mut libc::c_void as *mut nlattr;
-                        while len2 < aggr_len {
-                            match (*na).nla_type as libc::c_int {
-                                1 => {
-                                    rtid = *((na as *mut libc::c_char)
-                                        .offset(
-                                            ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                as libc::c_int as isize,
-                                        ) as *mut libc::c_void as *mut libc::c_int);
-                                    if print_delays != 0 {
-                                        printf(
-                                            b"PID\t%d\n\0" as *const u8 as *const libc::c_char,
-                                            rtid,
-                                        );
-                                    }
-                                }
-                                2 => {
-                                    rtid = *((na as *mut libc::c_char)
-                                        .offset(
-                                            ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                as libc::c_int as isize,
-                                        ) as *mut libc::c_void as *mut libc::c_int);
-                                    if print_delays != 0 {
-                                        printf(
-                                            b"TGID\t%d\n\0" as *const u8 as *const libc::c_char,
-                                            rtid,
-                                        );
-                                    }
-                                }
-                                3 => {
-                                    if print_delays != 0 {
-                                        print_delayacct(
-                                            (na as *mut libc::c_char)
-                                                .offset(
-                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                        as libc::c_int as isize,
-                                                ) as *mut libc::c_void as *mut taskstats,
-                                        );
-                                    }
-                                    if print_io_accounting != 0 {
-                                        print_ioacct(
-                                            (na as *mut libc::c_char)
-                                                .offset(
-                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                        as libc::c_int as isize,
-                                                ) as *mut libc::c_void as *mut taskstats,
-                                        );
-                                    }
-                                    if print_task_context_switch_counts != 0 {
-                                        task_context_switch_counts(
-                                            (na as *mut libc::c_char)
-                                                .offset(
-                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                        as libc::c_int as isize,
-                                                ) as *mut libc::c_void as *mut taskstats,
-                                        );
-                                    }
-                                    if fd != 0 {
-                                        if write(
-                                            fd,
-                                            (na as *mut libc::c_char)
-                                                .offset(
-                                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                                        as libc::c_int as isize,
-                                                ) as *mut libc::c_void,
-                                            (*na).nla_len as size_t,
-                                        ) < 0 as libc::c_int as libc::c_long
-                                        {
-                                            fprintf(
-                                                stderr,
-                                                b"write error\n\0" as *const u8 as *const libc::c_char,
-                                            );
-                                            exit(1 as libc::c_int);
-                                        }
-                                    }
-                                    if loop_0 == 0 {
-                                        break 's_556;
-                                    }
-                                }
-                                6 => {}
-                                _ => {
-                                    fprintf(
-                                        stderr,
-                                        b"Unknown nested nla_type %d\n\0" as *const u8
-                                            as *const libc::c_char,
-                                        (*na).nla_type as libc::c_int,
-                                    );
-                                }
+        let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]).unwrap();
+
+        match response.payload {
+            NetlinkPayload::Error(err) => {
+                if dbg != 0 {
+                    fprintf(
+                        stderr,
+                        b"fatal reply error,  errno %d\n\0" as *const u8
+                            as *const libc::c_char,
+                        err.code,
+                    );
+                }
+                break;
+            },
+            NetlinkPayload::InnerMessage(genlmsg) => {
+                for nla in genlmsg.payload.nlas.iter() {
+                    match nla {
+                        TaskstatsTypeAttrs::Pid(rtid) => {
+                            if print_delays != 0 {
+                                println!("PID\t{}", rtid);
                             }
-                            len2
-                                += (*na).nla_len as libc::c_int + 4 as libc::c_int
-                                    - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
-                            na = (na as *mut libc::c_char)
-                                .offset(
-                                    ((*na).nla_len as libc::c_int + 4 as libc::c_int
-                                        - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int))
-                                        as isize,
-                                ) as *mut nlattr;
-                        }
-                    }
-                    1 => {
-                        print_cgroupstats(
-                            (na as *mut libc::c_char)
-                                .offset(
-                                    ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
-                                        .wrapping_add(4 as libc::c_int as libc::c_ulong)
-                                        .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                                        & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
-                                        as libc::c_int as isize,
-                                ) as *mut libc::c_void as *mut cgroupstats,
-                        );
-                    }
-                    6 => {}
-                    _ => {
-                        fprintf(
-                            stderr,
-                            b"Unknown nla_type %d\n\0" as *const u8
-                                as *const libc::c_char,
-                            (*na).nla_type as libc::c_int,
-                        );
+                        },
+                        TaskstatsTypeAttrs::Tgid(rtid) => {
+                            if print_delays != 0 {
+                                println!("TGID\t{}", rtid);
+                            }
+                        },
+                        TaskstatsTypeAttrs::Stats(stats) => {
+                            if print_delays != 0 {
+                                print_delayacct_rs(stats);
+                            }
+                            if print_io_accounting != 0 {
+                                print_ioacct_rs(stats);
+                            }
+                            if print_task_context_switch_counts != 0 {
+                                task_context_switch_counts_rs(stats);
+                            }
+                        },
+                        TaskstatsTypeAttrs::AggrPid(rtid, stats) => {
+                            if print_delays != 0 {
+                                println!("PID\t{}", rtid);
+                                print_delayacct_rs(stats);
+                            }
+                            if print_io_accounting != 0 {
+                                print_ioacct_rs(stats);
+                            }
+                            if print_task_context_switch_counts != 0 {
+                                task_context_switch_counts_rs(stats);
+                            }
+                        },
+                        TaskstatsTypeAttrs::AggrTgid(rtid, stats) => {
+                            if print_delays != 0 {
+                                println!("PID\t{}", rtid);
+                                print_delayacct_rs(stats);
+                            }
+                            if print_io_accounting != 0 {
+                                print_ioacct_rs(stats);
+                            }
+                            if print_task_context_switch_counts != 0 {
+                                task_context_switch_counts_rs(stats);
+                            }
+                        },
+                        _ => {}
                     }
                 }
-                na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
-                    .offset(
-                        ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
-                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                            & !(4 as libc::c_uint)
-                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                as libc::c_ulong) as libc::c_int as isize,
-                    ) as *mut libc::c_void)
-                    .offset(
-                        ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
-                            .wrapping_add(4 as libc::c_uint as libc::c_ulong)
-                            .wrapping_sub(1 as libc::c_int as libc::c_ulong)
-                            & !(4 as libc::c_uint)
-                                .wrapping_sub(1 as libc::c_int as libc::c_uint)
-                                as libc::c_ulong) as isize,
-                    )
-                    .offset(len as isize) as *mut nlattr;
+            }
+            _ => {
+
             }
         }
+
+
+
+        // if rep_len < 0 as libc::c_int {
+        //     fprintf(
+        //         stderr,
+        //         b"nonfatal reply error: errno %d\n\0" as *const u8
+        //             as *const libc::c_char,
+        //         *__errno_location(),
+        //     );
+        // } else if msg.n.nlmsg_type as libc::c_int
+        //     == 0x2 as libc::c_int
+        //     || !(rep_len
+        //         >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
+        //             as libc::c_int
+        //         && msg.n.nlmsg_len as libc::c_ulong
+        //             >= ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong
+        //         && msg.n.nlmsg_len <= rep_len as libc::c_uint)
+        // {
+        //     let mut err: *mut nlmsgerr = (&mut msg as *mut msgtemplate
+        //         as *mut libc::c_char)
+        //         .offset(
+        //             ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+        //                 .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                 & !(4 as libc::c_uint)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                     as libc::c_ulong) as libc::c_int as isize,
+        //         ) as *mut libc::c_void as *mut nlmsgerr;
+        //     fprintf(
+        //         stderr,
+        //         b"fatal reply error,  errno %d\n\0" as *const u8
+        //             as *const libc::c_char,
+        //         (*err).error,
+        //     );
+        //     break;
+        // } else {
+        //     if dbg != 0 {
+        //         printf(
+        //             b"nlmsghdr size=%zu, nlmsg_len=%d, rep_len=%d\n\0"
+        //                 as *const u8 as *const libc::c_char,
+        //             ::core::mem::size_of::<nlmsghdr>() as libc::c_ulong,
+        //             msg.n.nlmsg_len,
+        //             rep_len,
+        //         );
+        //     }
+        //     rep_len = ((msg.n.nlmsg_len)
+        //         .wrapping_sub(
+        //             ((0 as libc::c_int
+        //                 + ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+        //                     .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                     & !(4 as libc::c_uint)
+        //                         .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                         as libc::c_ulong) as libc::c_int) as libc::c_uint)
+        //                 .wrapping_add(4 as libc::c_uint)
+        //                 .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                 & !(4 as libc::c_uint)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_uint),
+        //         ) as libc::c_ulong)
+        //         .wrapping_sub(
+        //             (::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+        //                 .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                 & !(4 as libc::c_uint)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                     as libc::c_ulong,
+        //         ) as libc::c_int;
+        //     na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
+        //         .offset(
+        //             ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+        //                 .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                 & !(4 as libc::c_uint)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                     as libc::c_ulong) as libc::c_int as isize,
+        //         ) as *mut libc::c_void)
+        //         .offset(
+        //             ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+        //                 .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                 & !(4 as libc::c_uint)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                     as libc::c_ulong) as isize,
+        //         ) as *mut nlattr;
+        //     len = 0 as libc::c_int;
+        //     while len < rep_len {
+        //         len
+        //             += (*na).nla_len as libc::c_int + 4 as libc::c_int
+        //                 - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
+        //         match (*na).nla_type as libc::c_int {
+        //             5 | 4 => {
+        //                 aggr_len = (*na).nla_len as libc::c_int
+        //                     - ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                         .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                         .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                         & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                         as libc::c_int;
+        //                 len2 = 0 as libc::c_int;
+        //                 na = (na as *mut libc::c_char)
+        //                     .offset(
+        //                         ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                             .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                             .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                             & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                             as libc::c_int as isize,
+        //                     ) as *mut libc::c_void as *mut nlattr;
+        //                 while len2 < aggr_len {
+        //                     match (*na).nla_type as libc::c_int {
+        //                         1 => {
+        //                             rtid = *((na as *mut libc::c_char)
+        //                                 .offset(
+        //                                     ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                         .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                         .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                         & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                         as libc::c_int as isize,
+        //                                 ) as *mut libc::c_void as *mut libc::c_int);
+        //                             if print_delays != 0 {
+        //                                 printf(
+        //                                     b"PID\t%d\n\0" as *const u8 as *const libc::c_char,
+        //                                     rtid,
+        //                                 );
+        //                             }
+        //                         }
+        //                         2 => {
+        //                             rtid = *((na as *mut libc::c_char)
+        //                                 .offset(
+        //                                     ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                         .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                         .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                         & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                         as libc::c_int as isize,
+        //                                 ) as *mut libc::c_void as *mut libc::c_int);
+        //                             if print_delays != 0 {
+        //                                 printf(
+        //                                     b"TGID\t%d\n\0" as *const u8 as *const libc::c_char,
+        //                                     rtid,
+        //                                 );
+        //                             }
+        //                         }
+        //                         3 => {
+        //                             if print_delays != 0 {
+        //                                 print_delayacct(
+        //                                     (na as *mut libc::c_char)
+        //                                         .offset(
+        //                                             ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                                 .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                                 & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                                 as libc::c_int as isize,
+        //                                         ) as *mut libc::c_void as *mut taskstats,
+        //                                 );
+        //                             }
+        //                             if print_io_accounting != 0 {
+        //                                 print_ioacct(
+        //                                     (na as *mut libc::c_char)
+        //                                         .offset(
+        //                                             ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                                 .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                                 & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                                 as libc::c_int as isize,
+        //                                         ) as *mut libc::c_void as *mut taskstats,
+        //                                 );
+        //                             }
+        //                             if print_task_context_switch_counts != 0 {
+        //                                 task_context_switch_counts(
+        //                                     (na as *mut libc::c_char)
+        //                                         .offset(
+        //                                             ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                                 .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                                 & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                                 as libc::c_int as isize,
+        //                                         ) as *mut libc::c_void as *mut taskstats,
+        //                                 );
+        //                             }
+        //                             if fd != 0 {
+        //                                 if write(
+        //                                     fd,
+        //                                     (na as *mut libc::c_char)
+        //                                         .offset(
+        //                                             ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                                 .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                                 & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                                 as libc::c_int as isize,
+        //                                         ) as *mut libc::c_void,
+        //                                     (*na).nla_len as size_t,
+        //                                 ) < 0 as libc::c_int as libc::c_long
+        //                                 {
+        //                                     fprintf(
+        //                                         stderr,
+        //                                         b"write error\n\0" as *const u8 as *const libc::c_char,
+        //                                     );
+        //                                     exit(1 as libc::c_int);
+        //                                 }
+        //                             }
+        //                             if loop_0 == 0 {
+        //                                 break 's_556;
+        //                             }
+        //                         }
+        //                         6 => {}
+        //                         _ => {
+        //                             fprintf(
+        //                                 stderr,
+        //                                 b"Unknown nested nla_type %d\n\0" as *const u8
+        //                                     as *const libc::c_char,
+        //                                 (*na).nla_type as libc::c_int,
+        //                             );
+        //                         }
+        //                     }
+        //                     len2
+        //                         += (*na).nla_len as libc::c_int + 4 as libc::c_int
+        //                             - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int);
+        //                     na = (na as *mut libc::c_char)
+        //                         .offset(
+        //                             ((*na).nla_len as libc::c_int + 4 as libc::c_int
+        //                                 - 1 as libc::c_int & !(4 as libc::c_int - 1 as libc::c_int))
+        //                                 as isize,
+        //                         ) as *mut nlattr;
+        //                 }
+        //             }
+        //             1 => {
+        //                 print_cgroupstats(
+        //                     (na as *mut libc::c_char)
+        //                         .offset(
+        //                             ((::core::mem::size_of::<nlattr>() as libc::c_ulong)
+        //                                 .wrapping_add(4 as libc::c_int as libc::c_ulong)
+        //                                 .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                                 & !(4 as libc::c_int - 1 as libc::c_int) as libc::c_ulong)
+        //                                 as libc::c_int as isize,
+        //                         ) as *mut libc::c_void as *mut cgroupstats,
+        //                 );
+        //             }
+        //             6 => {}
+        //             _ => {
+        //                 fprintf(
+        //                     stderr,
+        //                     b"Unknown nla_type %d\n\0" as *const u8
+        //                         as *const libc::c_char,
+        //                     (*na).nla_type as libc::c_int,
+        //                 );
+        //             }
+        //         }
+        //         na = ((&mut msg as *mut msgtemplate as *mut libc::c_char)
+        //             .offset(
+        //                 ((::core::mem::size_of::<nlmsghdr>() as libc::c_ulong)
+        //                     .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                     & !(4 as libc::c_uint)
+        //                         .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                         as libc::c_ulong) as libc::c_int as isize,
+        //             ) as *mut libc::c_void)
+        //             .offset(
+        //                 ((::core::mem::size_of::<genlmsghdr>() as libc::c_ulong)
+        //                     .wrapping_add(4 as libc::c_uint as libc::c_ulong)
+        //                     .wrapping_sub(1 as libc::c_int as libc::c_ulong)
+        //                     & !(4 as libc::c_uint)
+        //                         .wrapping_sub(1 as libc::c_int as libc::c_uint)
+        //                         as libc::c_ulong) as isize,
+        //             )
+        //             .offset(len as isize) as *mut nlattr;
+        //     }
+        // }
         if !(loop_0 != 0) {
             break;
         }
@@ -1492,6 +1674,7 @@ unsafe fn main_0(
     return 0 as libc::c_int;
 }
 pub fn main() {
+    pretty_env_logger::init();
     let mut args: Vec::<*mut libc::c_char> = Vec::new();
     for arg in ::std::env::args() {
         args.push(
