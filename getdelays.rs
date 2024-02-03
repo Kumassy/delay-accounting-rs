@@ -10,6 +10,8 @@ use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage
 mod taskstats_packet;
 use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 
+use crate::taskstats_packet::Taskstats;
+
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -1156,12 +1158,23 @@ unsafe fn main_0(
         panic!();
     }
     's_556: loop {
-        rep_len = recv(
-            nl_sd,
+        // rep_len = recv(
+        //     nl_sd,
+        //     &mut msg as *mut msgtemplate as *mut libc::c_void,
+        //     ::core::mem::size_of::<msgtemplate>() as libc::c_ulong,
+        //     0 as libc::c_int,
+        // ) as libc::c_int;
+
+        let mut rxbuf = vec![0; ::core::mem::size_of::<msgtemplate>()];
+        rep_len = socket.recv(&mut &mut rxbuf[..], 0).unwrap() as libc::c_int;
+    
+
+        memcpy(
             &mut msg as *mut msgtemplate as *mut libc::c_void,
-            ::core::mem::size_of::<msgtemplate>() as libc::c_ulong,
-            0 as libc::c_int,
-        ) as libc::c_int;
+            rxbuf.as_ptr() as *const libc::c_void,
+            rep_len as libc::c_ulong,
+        );
+
         if dbg != 0 {
             printf(
                 b"received %d bytes\n\0" as *const u8
@@ -1169,6 +1182,13 @@ unsafe fn main_0(
                 rep_len,
             );
         }
+
+        let t = Taskstats::default();
+        dbg!(t);
+
+        println!("{:x?}", &rxbuf[0..(rep_len as usize)]);
+        // let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
+        // dbg!(response);
         if rep_len < 0 as libc::c_int {
             fprintf(
                 stderr,
