@@ -1183,12 +1183,9 @@ unsafe fn main_0(
             );
         }
 
-        let t = Taskstats::default();
-        dbg!(t);
-
         println!("{:x?}", &rxbuf[0..(rep_len as usize)]);
-        // let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
-        // dbg!(response);
+        let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl>>>::deserialize(&rxbuf[0..(rep_len as usize)]);
+        dbg!(response);
         if rep_len < 0 as libc::c_int {
             fprintf(
                 stderr,

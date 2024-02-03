@@ -109,10 +109,8 @@ pub enum TaskstatsCmdAttrs {
     Unspec,
     Pid(u32),
     Tgid(u32),
-    // TODO: fix String doesn't compatible with UTF-8
-    RegisterCpumask(String),
-    // TODO: fix String doesn't compatible with UTF-8
-    DeregisterCpumask(String),
+    RegisterCpumask(Vec<u8>),
+    DeregisterCpumask(Vec<u8>),
 }
 pub const TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK: u16 = 4;
 pub const TASKSTATS_CMD_ATTR_REGISTER_CPUMASK: u16 = 3;
@@ -127,8 +125,8 @@ impl Nla for TaskstatsCmdAttrs {
             Unspec => 0,
             Pid(v) => size_of_val(v),
             Tgid(v) => size_of_val(v),
-            RegisterCpumask(s) => s.len() + 1,
-            DeregisterCpumask(s) => s.len() + 1,
+            RegisterCpumask(v) => v.len(),
+            DeregisterCpumask(v) => v.len(),
         }
     }
 
@@ -149,13 +147,11 @@ impl Nla for TaskstatsCmdAttrs {
             Unspec => {},
             Pid(v) => NativeEndian::write_u32(buffer, *v),
             Tgid(v) => NativeEndian::write_u32(buffer, *v),
-            RegisterCpumask(s) => {
-                buffer[..s.len()].copy_from_slice(s.as_bytes());
-                buffer[s.len()] = 0;
+            RegisterCpumask(v) => {
+                buffer[..v.len()].copy_from_slice(v);
             },
-            DeregisterCpumask(s) => {
-                buffer[..s.len()].copy_from_slice(s.as_bytes());
-                buffer[s.len()] = 0;
+            DeregisterCpumask(v) => {
+                buffer[..v.len()].copy_from_slice(v);
             },
         }
     }
@@ -176,14 +172,14 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                 parse_u32(payload)
                     .context("invalid TASKSTATS_CMD_ATTR_TGID value")?,
             ),
-            TASKSTATS_CMD_ATTR_REGISTER_CPUMASK => Self::RegisterCpumask(
-                parse_string(payload)
-                    .context("invalid TASKSTATS_CMD_ATTR_REGISTER_CPUMASK value")?,
-            ),
-            TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK => Self::DeregisterCpumask(
-                parse_string(payload)
-                    .context("invalid TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK value")?,
-            ),
+            TASKSTATS_CMD_ATTR_REGISTER_CPUMASK => {
+                let bytes = payload.to_vec();
+                Self::RegisterCpumask(bytes)
+            },
+            TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK => {
+                let bytes = payload.to_vec();
+                Self::DeregisterCpumask(bytes)
+            },
             kind => {
                 return Err(DecodeError::from(format!(
                     "Unknown NLA type: {kind}"
