@@ -3,6 +3,7 @@
 use std::os::fd::AsRawFd;
 
 use ::c2rust_out::*;
+use clap::{arg, command, Parser};
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
 use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
@@ -1673,8 +1674,28 @@ unsafe fn main_0(
     }
     return 0 as libc::c_int;
 }
+
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short = 'd')]
+    print_delays_o: bool,
+
+    #[arg(short = 'i')]
+    print_io_accounting_o: bool,
+
+    #[arg(short = 'q')]
+    print_task_context_switch_counts_o: bool,
+
+    #[arg(short = 'p')]
+    pid: i32,
+}
+
+
 pub fn main() {
     pretty_env_logger::init();
+    let args = Args::parse();
+    println!("{args:?}");
     let mut args: Vec::<*mut libc::c_char> = Vec::new();
     for arg in ::std::env::args() {
         args.push(
