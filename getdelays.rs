@@ -1,6 +1,6 @@
 #![allow(dead_code, mutable_transmutes, non_camel_case_types, non_snake_case, non_upper_case_globals, unused_assignments, unused_mut)]
 #![feature(extern_types)]
-use std::os::fd::AsRawFd;
+use std::{os::fd::AsRawFd};
 
 use ::c2rust_out::*;
 use clap::{arg, command, Parser};
@@ -384,7 +384,6 @@ fn create_nl_socket_rs() -> Socket {
     // TODO: Set RCVBUF
 
     let addr = socket.bind_auto().unwrap();
-    println!("socket port number = {}", addr.port_number());
 
     socket
 }
@@ -623,7 +622,6 @@ fn get_family_id_rs(socket: &Socket) -> u16 {
                         _ => None
                     }
                 }).unwrap();
-                dbg!(family_id);
                 family_id
             } else {
                 panic!("unexpected response");
@@ -1688,29 +1686,104 @@ struct Args {
     print_task_context_switch_counts_o: bool,
 
     #[arg(short = 'p')]
-    pid: i32,
+    pid: u32,
 }
 
 
 pub fn main() {
     pretty_env_logger::init();
     let args = Args::parse();
-    println!("{args:?}");
-    let mut args: Vec::<*mut libc::c_char> = Vec::new();
-    for arg in ::std::env::args() {
-        args.push(
-            (::std::ffi::CString::new(arg))
-                .expect("Failed to convert argument into CString.")
-                .into_raw(),
-        );
+
+    let socket = create_nl_socket_rs();
+    let pid = std::process::id();
+    let family_id = get_family_id_rs(&socket);
+    
+    if family_id == 0 {
+        error!("Error getting family id, errno");
+        return;
     }
-    args.push(::core::ptr::null_mut());
-    unsafe {
-        ::std::process::exit(
-            main_0(
-                (args.len() - 1) as libc::c_int,
-                args.as_mut_ptr() as *mut *mut libc::c_char,
-            ) as i32,
-        )
+    debug!("family id {}", family_id);
+
+    if args.pid != 0 {
+        let mut genlmsg = GenlMessage::from_payload(TaskstatsCtrl {
+            cmd: TaskstatsCmd::Get,
+            nlas: vec![TaskstatsCmdAttrs::Pid(args.pid)]
+        });
+        genlmsg.set_resolved_family_id(family_id);
+        genlmsg.finalize();
+        send_cmd_rs(&socket, family_id, std::process::id(), NetlinkPayload::from(genlmsg));
+
+        debug!("Sent pid/tgid");
     }
+
+    let mut rxbuf = vec![0; 4096];
+    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0).unwrap();
+
+    debug!("received {} bytes", rep_len);
+
+    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]).unwrap();
+
+
+    match response.payload {
+        NetlinkPayload::Error(err) => {
+            debug!("fatal reply error: {}", err);
+            return;
+        },
+        NetlinkPayload::InnerMessage(genlmsg) => {
+            for nla in genlmsg.payload.nlas.iter() {
+                match nla {
+                    TaskstatsTypeAttrs::Pid(rtid) => {
+                        if args.print_delays_o {
+                            println!("PID\t{}", rtid);
+                        }
+                    },
+                    TaskstatsTypeAttrs::Tgid(rtid) => {
+                        if args.print_delays_o {
+                            println!("TGID\t{}", rtid);
+                        }
+                    },
+                    TaskstatsTypeAttrs::Stats(stats) => {
+                        if args.print_delays_o {
+                            print_delayacct_rs(stats);
+                        }
+                        if args.print_io_accounting_o {
+                            print_ioacct_rs(stats);
+                        }
+                        if args.print_task_context_switch_counts_o {
+                            task_context_switch_counts_rs(stats);
+                        }
+                    },
+                    TaskstatsTypeAttrs::AggrPid(rtid, stats) => {
+                        if args.print_delays_o {
+                            println!("PID\t{}", rtid);
+                            print_delayacct_rs(stats);
+                        }
+                        if args.print_io_accounting_o {
+                            print_ioacct_rs(stats);
+                        }
+                        if args.print_task_context_switch_counts_o {
+                            task_context_switch_counts_rs(stats);
+                        }
+                    },
+                    TaskstatsTypeAttrs::AggrTgid(rtid, stats) => {
+                        if args.print_delays_o {
+                            println!("PID\t{}", rtid);
+                            print_delayacct_rs(stats);
+                        }
+                        if args.print_io_accounting_o {
+                            print_ioacct_rs(stats);
+                        }
+                        if args.print_task_context_switch_counts_o {
+                            task_context_switch_counts_rs(stats);
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+        _ => {
+
+        }
+    }
+
 }
