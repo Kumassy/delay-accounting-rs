@@ -1,5 +1,5 @@
 use netlink_packet_generic::{GenlFamily, GenlHeader};
-use netlink_packet_utils::{nla::{Nla, NlasIterator, NlaBuffer}, traits::*, DecodeError, parsers::{parse_u32, parse_string}};
+use netlink_packet_utils::{nla::{Nla, NlasIterator, NlaBuffer}, traits::*, DecodeError, parsers::parse_u32};
 use byteorder::{ByteOrder, NativeEndian};
 use anyhow::Context;
 use std::mem::{size_of, size_of_val};
@@ -396,15 +396,12 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                 }
                 let pid = match &nlas[0] {
                     TaskstatsTypeAttrs::Pid(pid) => *pid,
-                    _ => return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes[0] type"
-                    )))
+                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_PID attributes[0] type"))
                 };
                 let stats = match &nlas[1] {
                     TaskstatsTypeAttrs::Stats(stats) => *stats,
-                    _ => return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes[1] type"
-                    )))
+                    _ => return Err(DecodeError::from(
+                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes[1] type"))
                 };
                 Self::AggrPid(pid, stats)
             },
@@ -420,15 +417,11 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                 }
                 let tgid = match &nlas[0] {
                     TaskstatsTypeAttrs::Tgid(pid) => *pid,
-                    _ => return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_TGID attributes[0] type"
-                    )))
+                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_TGID attributes[0] type"))
                 };
                 let stats = match &nlas[1] {
                     TaskstatsTypeAttrs::Stats(stats) => *stats,
-                    _ => return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_TGID attributes[1] type"
-                    )))
+                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_TGID attributes[1] type"))
                 };
                 Self::AggrTgid(tgid, stats)
             },
@@ -444,8 +437,6 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
 
 #[cfg(test)]
 mod tests {
-    use std::mem::size_of;
-
     use super::*;
 
     #[test]

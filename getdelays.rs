@@ -4,14 +4,14 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use clap::{arg, Parser};
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
-use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
-use netlink_packet_generic::{constants::{GENL_HDRLEN, GENL_ID_CTRL}, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
+use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST};
+use netlink_packet_generic::{constants::GENL_ID_CTRL, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
 
 mod taskstats_packet;
 use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 
 use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
-use log::{debug, info, warn, error};
+use log::*;
 
 fn create_nl_socket() -> Result<Socket> {
     let mut socket = Socket::new(NETLINK_GENERIC)?;
