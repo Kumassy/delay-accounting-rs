@@ -1,4 +1,6 @@
-use anyhow::{anyhow, bail, Result};
+use std::mem::size_of;
+
+use anyhow::{anyhow, bail, Context, Result};
 
 use clap::{arg, Parser};
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
@@ -50,7 +52,7 @@ fn get_family_id(socket: &Socket) -> Result<u16> {
         nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())]
     });
     genlmsg.finalize();
-    send_cmd(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg));
+    send_cmd(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg))?;
 
     let mut rxbuf = vec![0; 4096];
     let rep_len = socket.recv(&mut &mut rxbuf[..], 0)?;
@@ -201,12 +203,24 @@ struct Args {
 pub fn main() -> Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
+    if args.print_delays {
+        println!("print delayacct stats ON");
+    }
+    if args.print_io_accounting {
+        println!("printing IO accounting");
+    }
+    if args.print_task_context_switch_counts {
+        println!("printing task/process context switch rates");
+    }
+    if args.pid == 0 {
+        bail!("Invalid pid");
+    }
 
-    let socket = create_nl_socket()?;
-    let family_id = get_family_id(&socket)?;
+    let socket = create_nl_socket().context("error creating Netlink socket")?;
+    let family_id = get_family_id(&socket).context("Error getting family id")?;
     
     if family_id == 0 {
-        bail!("Error getting family id, errno");
+        bail!("Error getting family id");
     }
     debug!("family id {}", family_id);
 
@@ -217,18 +231,17 @@ pub fn main() -> Result<()> {
         });
         genlmsg.set_resolved_family_id(family_id);
         genlmsg.finalize();
-        send_cmd(&socket, family_id, std::process::id(), NetlinkPayload::from(genlmsg));
+        send_cmd(&socket, family_id, std::process::id(), NetlinkPayload::from(genlmsg)).context("error sending tid/tgid cmd")?;
 
-        debug!("Sent pid/tgid");
+        debug!("Sent pid/tgid, retval 0");
     }
 
     let mut rxbuf = vec![0; 4096];
-    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0)?;
-
+    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0).context("nonfatal reply error")?; // TODO: handle nonfatal reply error
     debug!("received {} bytes", rep_len);
 
-    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)])?;
-
+    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]).context("fatal reply error: unable to parse Netlink Packet")?;
+    debug!("nlmsghdr size={}, nlmsg_len={}, rep_len={}", size_of::<NetlinkHeader>(), response.buffer_len(), rep_len);
 
     match response.payload {
         NetlinkPayload::Error(err) => {
@@ -282,12 +295,15 @@ pub fn main() -> Result<()> {
                             task_context_switch_counts(stats);
                         }
                     },
-                    _ => {}
+                    TaskstatsTypeAttrs::Null => {
+                    },
+                    _ => {
+                        warn!("Unknown nla_type {:?}", nla);
+                    }
                 }
             }
         }
         _ => {
-
         }
     }
 
