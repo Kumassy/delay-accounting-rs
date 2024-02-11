@@ -1,3 +1,5 @@
+use anyhow::{anyhow, bail, Result};
+
 use clap::{arg, Parser};
 use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use netlink_packet_core::{NetlinkMessage, NetlinkHeader, NetlinkPayload, constants::{NLM_F_REQUEST}, NetlinkSerializable};
@@ -9,21 +11,16 @@ use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
 use log::{debug, info, warn, error};
 
-fn create_nl_socket() -> Socket {
-    let mut socket = Socket::new(NETLINK_GENERIC).unwrap();
+fn create_nl_socket() -> Result<Socket> {
+    let mut socket = Socket::new(NETLINK_GENERIC)?;
+    socket.bind_auto()?;
 
-    // TODO: Set RCVBUF
-
-    let addr = socket.bind_auto().unwrap();
-
-    socket
+    Ok(socket)
 }
-fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) {
+fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) -> Result<()> {
     let mut netlink_message = NetlinkMessage::new(
         NetlinkHeader::default(), payload
     );
-    // TODO: netlink_message.header.length 
-    // netlink_message.header.length = 123;
     netlink_message.header.message_type = nlmsg_type;
     netlink_message.header.flags = NLM_F_REQUEST;
     netlink_message.header.sequence_number = 0;
@@ -36,17 +33,18 @@ fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_typ
 
     let mut sent = 0;
     while sent < buf.len() {
-        let r = socket.send_to(&buf[sent..], &SocketAddr::new(0, 0), 0).unwrap();
+        let r = socket.send_to(&buf[sent..], &SocketAddr::new(0, 0), 0)?;
         if r > 0 {
             sent += r;
         } else {
-            panic!("send failed");
+            return Err(anyhow!("failed to send packet to netlink socket"));
         }
     }
+    Ok(())
 }
 const TASKSTATS_GENL_NAME: &str = "TASKSTATS";
 
-fn get_family_id(socket: &Socket) -> u16 {
+fn get_family_id(socket: &Socket) -> Result<u16> {
     let mut genlmsg = GenlMessage::from_payload(GenlCtrl {
         cmd: GenlCtrlCmd::GetFamily,
         nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())]
@@ -55,33 +53,22 @@ fn get_family_id(socket: &Socket) -> u16 {
     send_cmd(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg));
 
     let mut rxbuf = vec![0; 4096];
-    let rep_len = socket.recv(&mut &mut rxbuf[..], 0).unwrap();
+    let rep_len = socket.recv(&mut &mut rxbuf[..], 0)?;
 
-    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf[0..rep_len]).unwrap();
+    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf[0..rep_len])?;
 
-    let id = match msg.payload {
-        NetlinkPayload::InnerMessage(genlmsg) => {
-            if GenlCtrlCmd::NewFamily == genlmsg.payload.cmd {
-                let family_id = genlmsg.payload.nlas.iter().find_map(|nla| {
-                    match nla {
-                        GenlCtrlAttrs::FamilyId(id) => Some(*id),
-                        _ => None
-                    }
-                }).unwrap();
-                family_id
-            } else {
-                panic!("unexpected response");
-            }
+    if let NetlinkPayload::InnerMessage(genlmsg) = msg.payload {
+        if GenlCtrlCmd::NewFamily == genlmsg.payload.cmd {
+            return genlmsg.payload.nlas.iter().find_map(|nla| {
+                match nla {
+                    GenlCtrlAttrs::FamilyId(id) => Some(*id),
+                    _ => None
+                }
+            }).ok_or(anyhow!("family id not found"))
         }
-        NetlinkPayload::Error(err) => {
-            panic!("Received a netlink error message: {err:?}");
-        }
-        _ => {
-            panic!("unexpected response");
-        }
-    };
+    }
 
-    id
+    Err(anyhow!("unexpected response"))
 }
 
 fn average_ms_f64(total: u64, count: u64) -> f64 {
@@ -211,16 +198,15 @@ struct Args {
 }
 
 
-pub fn main() {
+pub fn main() -> Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
 
-    let socket = create_nl_socket();
-    let family_id = get_family_id(&socket);
+    let socket = create_nl_socket()?;
+    let family_id = get_family_id(&socket)?;
     
     if family_id == 0 {
-        error!("Error getting family id, errno");
-        return;
+        bail!("Error getting family id, errno");
     }
     debug!("family id {}", family_id);
 
@@ -237,17 +223,16 @@ pub fn main() {
     }
 
     let mut rxbuf = vec![0; 4096];
-    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0).unwrap();
+    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0)?;
 
     debug!("received {} bytes", rep_len);
 
-    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]).unwrap();
+    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)])?;
 
 
     match response.payload {
         NetlinkPayload::Error(err) => {
-            debug!("fatal reply error: {}", err);
-            return;
+            bail!("fatal reply error: {}", err);
         },
         NetlinkPayload::InnerMessage(genlmsg) => {
             for nla in genlmsg.payload.nlas.iter() {
@@ -306,4 +291,5 @@ pub fn main() {
         }
     }
 
+    Ok(())
 }
