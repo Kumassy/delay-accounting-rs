@@ -1,21 +1,10 @@
-[workspace]
-members = [
-]
 [package]
-name = "c2rust_out"
-authors = ["C2Rust"]
-version = "0.0.0"
-publish = false
+name = "getdelays-rs"
+version = "0.1.0"
 edition = "2021"
-autobins = false
 
-[lib]
-name = "c2rust_out"
-path = "c2rust-lib.rs"
-crate-type = ["staticlib", "rlib"]
-[[bin]]
-path = "getdelays.rs"
-name = "getdelays"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
 anyhow = "1.0.79"
 byteorder = "1.5.0"
@@ -27,6 +16,3 @@ netlink-packet-generic = "0.3.3"
 netlink-packet-utils = "0.5.2"
 netlink-sys = "0.8.5"
 pretty_env_logger = "0.5.0"
-
-[profile.dev]
-debug-assertions = false
