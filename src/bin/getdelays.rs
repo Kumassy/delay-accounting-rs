@@ -13,10 +13,8 @@ use netlink_packet_generic::{
 };
 use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
 
-mod taskstats_packet;
-use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
+use getdelays_rs::taskstats::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl, Taskstats, TaskstatsTypeAttrs};
 
-use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
 use log::*;
 
 fn create_nl_socket() -> Result<Socket> {
