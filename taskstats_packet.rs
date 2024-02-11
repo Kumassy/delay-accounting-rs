@@ -1,21 +1,25 @@
-use netlink_packet_generic::{GenlFamily, GenlHeader};
-use netlink_packet_utils::{nla::{Nla, NlasIterator, NlaBuffer}, traits::*, DecodeError, parsers::parse_u32};
-use byteorder::{ByteOrder, NativeEndian};
 use anyhow::Context;
+use byteorder::{ByteOrder, NativeEndian};
+use netlink_packet_generic::{GenlFamily, GenlHeader};
+use netlink_packet_utils::{
+    nla::{Nla, NlaBuffer, NlasIterator},
+    parsers::parse_u32,
+    traits::*,
+    DecodeError,
+};
 use std::mem::{size_of, size_of_val};
 
 /// Command code definition of Taskstats family
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskstatsCmd {
-    Unspec = 0,	/* Reserved */
-	Get,		/* user->kernel request/get-response */
-	New,		/* kernel->user event */
+    Unspec = 0, /* Reserved */
+    Get,        /* user->kernel request/get-response */
+    New,        /* kernel->user event */
 }
 
 pub const TASKSTATS_CMD_NEW: u8 = 2;
 pub const TASKSTATS_CMD_GET: u8 = 1;
 pub const TASKSTATS_CMD_UNSPEC: u8 = 0;
-
 
 impl From<TaskstatsCmd> for u8 {
     fn from(cmd: TaskstatsCmd) -> u8 {
@@ -37,11 +41,7 @@ impl TryFrom<u8> for TaskstatsCmd {
             TASKSTATS_CMD_UNSPEC => Unspec,
             TASKSTATS_CMD_GET => Get,
             TASKSTATS_CMD_NEW => New,
-            cmd => {
-                return Err(DecodeError::from(format!(
-                    "Unknown control command: {cmd}"
-                )))
-            }
+            cmd => return Err(DecodeError::from(format!("Unknown control command: {cmd}"))),
         })
     }
 }
@@ -54,7 +54,6 @@ pub struct TaskstatsCtrl<T> {
     /// Netlink attributes in this message
     pub nlas: Vec<T>,
 }
-
 
 impl<T> GenlFamily for TaskstatsCtrl<T> {
     fn family_name() -> &'static str {
@@ -70,7 +69,6 @@ impl<T> GenlFamily for TaskstatsCtrl<T> {
     }
 }
 
-
 impl<T: Nla> Emitable for TaskstatsCtrl<T> {
     fn emit(&self, buffer: &mut [u8]) {
         self.nlas.as_slice().emit(buffer)
@@ -81,12 +79,8 @@ impl<T: Nla> Emitable for TaskstatsCtrl<T> {
     }
 }
 
-
 impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl<TaskstatsCmdAttrs> {
-    fn parse_with_param(
-        buf: &[u8],
-        header: GenlHeader,
-    ) -> Result<Self, DecodeError> {
+    fn parse_with_param(buf: &[u8], header: GenlHeader) -> Result<Self, DecodeError> {
         Ok(Self {
             cmd: header.cmd.try_into()?,
             nlas: parse_cmd_attrs(buf)?,
@@ -95,17 +89,13 @@ impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl<TaskstatsCmdAttrs
 }
 
 impl ParseableParametrized<[u8], GenlHeader> for TaskstatsCtrl<TaskstatsTypeAttrs> {
-    fn parse_with_param(
-        buf: &[u8],
-        header: GenlHeader,
-    ) -> Result<Self, DecodeError> {
+    fn parse_with_param(buf: &[u8], header: GenlHeader) -> Result<Self, DecodeError> {
         Ok(Self {
             cmd: header.cmd.try_into()?,
             nlas: parse_type_attrs(buf)?,
         })
     }
 }
-
 
 fn parse_cmd_attrs(buf: &[u8]) -> Result<Vec<TaskstatsCmdAttrs>, DecodeError> {
     let nlas = NlasIterator::new(buf)
@@ -163,47 +153,39 @@ impl Nla for TaskstatsCmdAttrs {
     fn emit_value(&self, buffer: &mut [u8]) {
         use TaskstatsCmdAttrs::*;
         match self {
-            Unspec => {},
+            Unspec => {}
             Pid(v) => NativeEndian::write_u32(buffer, *v),
             Tgid(v) => NativeEndian::write_u32(buffer, *v),
             RegisterCpumask(v) => {
                 buffer[..v.len()].copy_from_slice(v);
-            },
+            }
             DeregisterCpumask(v) => {
                 buffer[..v.len()].copy_from_slice(v);
-            },
+            }
         }
     }
 }
 
-impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
-    for TaskstatsCmdAttrs
-{
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for TaskstatsCmdAttrs {
     fn parse(buf: &NlaBuffer<&'a T>) -> Result<Self, DecodeError> {
         let payload = buf.value();
         Ok(match buf.kind() {
             TASKSTATS_CMD_ATTR_UNSPEC => Self::Unspec,
-            TASKSTATS_CMD_ATTR_PID => Self::Pid(
-                parse_u32(payload)
-                    .context("invalid TASKSTATS_CMD_ATTR_PID value")?,
-            ),
-            TASKSTATS_CMD_ATTR_TGID => Self::Tgid(
-                parse_u32(payload)
-                    .context("invalid TASKSTATS_CMD_ATTR_TGID value")?,
-            ),
+            TASKSTATS_CMD_ATTR_PID => {
+                Self::Pid(parse_u32(payload).context("invalid TASKSTATS_CMD_ATTR_PID value")?)
+            }
+            TASKSTATS_CMD_ATTR_TGID => {
+                Self::Tgid(parse_u32(payload).context("invalid TASKSTATS_CMD_ATTR_TGID value")?)
+            }
             TASKSTATS_CMD_ATTR_REGISTER_CPUMASK => {
                 let bytes = payload.to_vec();
                 Self::RegisterCpumask(bytes)
-            },
+            }
             TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK => {
                 let bytes = payload.to_vec();
                 Self::DeregisterCpumask(bytes)
-            },
-            kind => {
-                return Err(DecodeError::from(format!(
-                    "Unknown NLA type: {kind}"
-                )))
             }
+            kind => return Err(DecodeError::from(format!("Unknown NLA type: {kind}"))),
         })
     }
 }
@@ -287,8 +269,6 @@ pub const TASKSTATS_TYPE_TGID: u16 = 2;
 pub const TASKSTATS_TYPE_PID: u16 = 1;
 pub const TASKSTATS_TYPE_UNSPEC: u16 = 0;
 
-
-
 impl Nla for TaskstatsTypeAttrs {
     fn value_len(&self) -> usize {
         use TaskstatsTypeAttrs::*;
@@ -302,13 +282,13 @@ impl Nla for TaskstatsTypeAttrs {
                 let nla_stats = TaskstatsTypeAttrs::Stats(*s);
 
                 nla_pid.buffer_len() + nla_stats.buffer_len()
-            },
+            }
             AggrTgid(v, s) => {
                 let nla_tgid = TaskstatsTypeAttrs::Tgid(*v);
                 let nla_stats = TaskstatsTypeAttrs::Stats(*s);
 
                 nla_tgid.buffer_len() + nla_stats.buffer_len()
-            },
+            }
             Null => 0,
         }
     }
@@ -329,35 +309,35 @@ impl Nla for TaskstatsTypeAttrs {
     fn emit_value(&self, buffer: &mut [u8]) {
         use TaskstatsTypeAttrs::*;
         match self {
-            Unspec => {},
+            Unspec => {}
             Pid(v) => NativeEndian::write_u32(buffer, *v),
             Tgid(v) => NativeEndian::write_u32(buffer, *v),
             Stats(s) => {
                 let bytes: [u8; size_of::<Taskstats>()] = unsafe { std::mem::transmute(*s) };
                 buffer.copy_from_slice(&bytes);
-            },
+            }
             AggrPid(v, s) => {
                 let nla_pid = TaskstatsTypeAttrs::Pid(*v);
                 let nla_stats = TaskstatsTypeAttrs::Stats(*s);
-                
+
                 nla_pid.emit(buffer);
                 nla_stats.emit(&mut buffer[nla_pid.buffer_len()..]);
-            },
+            }
             AggrTgid(v, s) => {
                 let nla_tgid = TaskstatsTypeAttrs::Tgid(*v);
                 let nla_stats = TaskstatsTypeAttrs::Stats(*s);
-                
+
                 nla_tgid.emit(buffer);
                 nla_stats.emit(&mut buffer[nla_tgid.buffer_len()..]);
-            },
-            Null => {},
+            }
+            Null => {}
         }
     }
 }
 
 fn parse_taskstats(payload: &[u8]) -> Result<Taskstats, DecodeError> {
     if payload.len() != size_of::<Taskstats>() {
-        return Err(format!("invalid Taskstats length: {}", payload.len()).into())
+        return Err(format!("invalid Taskstats length: {}", payload.len()).into());
     }
 
     let mut bytes = [0; size_of::<Taskstats>()];
@@ -365,25 +345,20 @@ fn parse_taskstats(payload: &[u8]) -> Result<Taskstats, DecodeError> {
     Ok(unsafe { std::mem::transmute(bytes) })
 }
 
-impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
-    for TaskstatsTypeAttrs
-{
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for TaskstatsTypeAttrs {
     fn parse(buf: &NlaBuffer<&'a T>) -> Result<Self, DecodeError> {
         let payload = buf.value();
         Ok(match buf.kind() {
             TASKSTATS_TYPE_UNSPEC => Self::Unspec,
-            TASKSTATS_TYPE_PID => Self::Pid(
-                parse_u32(payload)
-                    .context("invalid TASKSTATS_TYPE_PID value")?,
-            ),
-            TASKSTATS_TYPE_TGID => Self::Tgid(
-                parse_u32(payload)
-                    .context("invalid TASKSTATS_TYPE_TGID value")?,
-            ),
-            TASKSTATS_TYPE_STATS => Self::Stats(
-                parse_taskstats(payload)
-                    .context("invalid TASKSTATS_TYPE_STATS value")?,
-            ),
+            TASKSTATS_TYPE_PID => {
+                Self::Pid(parse_u32(payload).context("invalid TASKSTATS_TYPE_PID value")?)
+            }
+            TASKSTATS_TYPE_TGID => {
+                Self::Tgid(parse_u32(payload).context("invalid TASKSTATS_TYPE_TGID value")?)
+            }
+            TASKSTATS_TYPE_STATS => {
+                Self::Stats(parse_taskstats(payload).context("invalid TASKSTATS_TYPE_STATS value")?)
+            }
             TASKSTATS_TYPE_AGGR_PID => {
                 let nlas = NlasIterator::new(payload)
                     .map(|nla| nla.and_then(|nla| TaskstatsTypeAttrs::parse(&nla)))
@@ -391,20 +366,28 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                     .context("failed to parse TASKSTATS_TYPE_AGGR_PID attributes")?;
                 if nlas.len() != 2 {
                     return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes length: {}", nlas.len()
-                    )))
+                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes length: {}",
+                        nlas.len()
+                    )));
                 }
                 let pid = match &nlas[0] {
                     TaskstatsTypeAttrs::Pid(pid) => *pid,
-                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_PID attributes[0] type"))
+                    _ => {
+                        return Err(DecodeError::from(
+                            "Invalid TASKSTATS_TYPE_AGGR_PID attributes[0] type",
+                        ))
+                    }
                 };
                 let stats = match &nlas[1] {
                     TaskstatsTypeAttrs::Stats(stats) => *stats,
-                    _ => return Err(DecodeError::from(
-                        "Invalid TASKSTATS_TYPE_AGGR_PID attributes[1] type"))
+                    _ => {
+                        return Err(DecodeError::from(
+                            "Invalid TASKSTATS_TYPE_AGGR_PID attributes[1] type",
+                        ))
+                    }
                 };
                 Self::AggrPid(pid, stats)
-            },
+            }
             TASKSTATS_TYPE_AGGR_TGID => {
                 let nlas = NlasIterator::new(payload)
                     .map(|nla| nla.and_then(|nla| TaskstatsTypeAttrs::parse(&nla)))
@@ -412,25 +395,30 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                     .context("failed to parse TASKSTATS_TYPE_AGGR_TGID attributes")?;
                 if nlas.len() != 2 {
                     return Err(DecodeError::from(format!(
-                        "Invalid TASKSTATS_TYPE_AGGR_TGID attributes length: {}", nlas.len()
-                    )))
+                        "Invalid TASKSTATS_TYPE_AGGR_TGID attributes length: {}",
+                        nlas.len()
+                    )));
                 }
                 let tgid = match &nlas[0] {
                     TaskstatsTypeAttrs::Tgid(pid) => *pid,
-                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_TGID attributes[0] type"))
+                    _ => {
+                        return Err(DecodeError::from(
+                            "Invalid TASKSTATS_TYPE_AGGR_TGID attributes[0] type",
+                        ))
+                    }
                 };
                 let stats = match &nlas[1] {
                     TaskstatsTypeAttrs::Stats(stats) => *stats,
-                    _ => return Err(DecodeError::from("Invalid TASKSTATS_TYPE_AGGR_TGID attributes[1] type"))
+                    _ => {
+                        return Err(DecodeError::from(
+                            "Invalid TASKSTATS_TYPE_AGGR_TGID attributes[1] type",
+                        ))
+                    }
                 };
                 Self::AggrTgid(tgid, stats)
-            },
-            TASKSTATS_TYPE_NULL => Self::Null,
-            kind => {
-                return Err(DecodeError::from(format!(
-                    "Unknown NLA type: {kind}"
-                )))
             }
+            TASKSTATS_TYPE_NULL => Self::Null,
+            kind => return Err(DecodeError::from(format!("Unknown NLA type: {kind}"))),
         })
     }
 }
@@ -444,11 +432,12 @@ mod tests {
         let type_pid_bytes = [
             8, 0, // nla_len
             1, 0, // nla_type
-            1, 0, 0, 0 // pid
+            1, 0, 0, 0, // pid
         ];
 
         let expected = TaskstatsTypeAttrs::Pid(1);
-        let parsed_nla = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_pid_bytes).unwrap()).unwrap();
+        let parsed_nla =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_pid_bytes).unwrap()).unwrap();
         assert_eq!(parsed_nla, expected);
     }
 
@@ -464,7 +453,7 @@ mod tests {
             0, // ac_nice
             0, 0, 0, 0, 0, 0, // hole: 6 bytes
             66, 8, 0, 0, 0, 0, 0, 0, // cpu_count
-            0xbf, 0x5e, 0xe7, 6, 0, 0, 0, 0,  // cpu_delay_total
+            0xbf, 0x5e, 0xe7, 6, 0, 0, 0, 0, // cpu_delay_total
             0xfc, 1, 0, 0, 0, 0, 0, 0, // blkio_count
             0x8c, 51, 48, 13, 0, 0, 0, 0, // blkio_delay_total
             0, 0, 0, 0, 0, 0, 0, 0, // swapin_count
@@ -503,7 +492,7 @@ mod tests {
             0xb9, 6, 0, 0, 0, 0, 0, 0, // nvcsw
             0xb0, 1, 0, 0, 0, 0, 0, 0, // nivcsw
             44, 0x2c, 3, 0, 0, 0, 0, 0, // ac_utimescaled
-            0x1a, 0xe3, 9, 0, 0, 0, 0, 0,  // ac_stimescaled
+            0x1a, 0xe3, 9, 0, 0, 0, 0, 0, // ac_stimescaled
             0xd9, 8, 4, 33, 0, 0, 0, 0, // cpu_scaled_run_real_total
             0, 0, 0, 0, 0, 0, 0, 0, // freepages_count
             0, 0, 0, 0, 0, 0, 0, 0, // freepages_delay_total
@@ -518,9 +507,8 @@ mod tests {
             1, 3, 1, 0, 0, 0, 0, 0, // ac_exe_dev
             0x6b, 0xd, 0, 0, 0, 0, 0, 0, // ac_exe_inode
             0x1c, 18, 0, 0, 0, 0, 0, 0, // wpcopy_count
-            13, 0xd8, 0xe4, 0, 0, 0, 0, 0  // wpcopy_delay_total
+            13, 0xd8, 0xe4, 0, 0, 0, 0, 0, // wpcopy_delay_total
         ];
-
 
         let expected = TaskstatsTypeAttrs::Stats(Taskstats {
             version: 0xd,
@@ -536,10 +524,8 @@ mod tests {
             cpu_run_real_total: 0x210408d9,
             cpu_run_virtual_total: 0x267aa10c,
             ac_comm: [
-                73, 79, 73, 74, 65, 0x6d, 64, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
+                73, 79, 73, 74, 65, 0x6d, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0,
             ],
             ac_sched: 0,
             ac_pad: [0, 0, 0],
@@ -584,7 +570,8 @@ mod tests {
             wpcopy_count: 0x121c,
             wpcopy_delay_total: 0xe4d80d,
         });
-        let parsed_nla = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_stats_bytes).unwrap()).unwrap();
+        let parsed_nla =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_stats_bytes).unwrap()).unwrap();
 
         assert_eq!(parsed_nla, expected);
     }
@@ -662,7 +649,7 @@ mod tests {
             1, 3, 1, 0, 0, 0, 0, 0, // ac_exe_dev
             0x6b, 0xd, 0, 0, 0, 0, 0, 0, // ac_exe_inode
             0x1c, 18, 0, 0, 0, 0, 0, 0, // wpcopy_count
-            13, 0xd8, 0xe4, 0, 0, 0, 0, 0 // wpcopy_delay_total
+            13, 0xd8, 0xe4, 0, 0, 0, 0, 0, // wpcopy_delay_total
         ];
 
         let expected_pid = 1;
@@ -680,10 +667,8 @@ mod tests {
             cpu_run_real_total: 0x210408d9,
             cpu_run_virtual_total: 0x267aa10c,
             ac_comm: [
-                73, 79, 73, 74, 65, 0x6d, 64, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
+                73, 79, 73, 74, 65, 0x6d, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0,
             ],
             ac_sched: 0,
             ac_pad: [0, 0, 0],
@@ -730,10 +715,11 @@ mod tests {
         };
         let expected = TaskstatsTypeAttrs::AggrPid(expected_pid, expected_stats);
 
-        let parsed_nla = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_pid_stats_bytes).unwrap()).unwrap();
+        let parsed_nla =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_pid_stats_bytes).unwrap())
+                .unwrap();
 
         assert_eq!(parsed_nla, expected);
-
     }
 
     #[test]
@@ -743,10 +729,10 @@ mod tests {
         nla.emit(&mut buffer);
         assert_eq!(nla.buffer_len(), 8);
 
-        let parsed_nla: TaskstatsTypeAttrs = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
+        let parsed_nla: TaskstatsTypeAttrs =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
         assert_eq!(parsed_nla, nla);
     }
-
 
     #[test]
     fn test_emit_parse_taskstats_type_stats() {
@@ -764,10 +750,8 @@ mod tests {
             cpu_run_real_total: 0x210408d9,
             cpu_run_virtual_total: 0x267aa10c,
             ac_comm: [
-                73, 79, 73, 74, 65, 0x6d, 64, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
+                73, 79, 73, 74, 65, 0x6d, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0,
             ],
             ac_sched: 0,
             ac_pad: [0, 0, 0],
@@ -816,79 +800,82 @@ mod tests {
         nla.emit(&mut buffer);
         assert_eq!(nla.buffer_len(), 420);
 
-        let parsed_nla = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
+        let parsed_nla =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
         assert_eq!(parsed_nla, nla);
     }
 
     #[test]
     fn test_emit_parse_taskstats_type_agg_pid_stats() {
-        let nla = TaskstatsTypeAttrs::AggrPid(123, Taskstats {
-            version: 0xd,
-            ac_exitcode: 0,
-            ac_flag: 0x2,
-            ac_nice: 0,
-            cpu_count: 0x0842,
-            cpu_delay_total: 0x6e75ebf,
-            blkio_count: 0x1fc,
-            blkio_delay_total: 0xd30338c,
-            swapin_count: 0,
-            swapin_delay_total: 0,
-            cpu_run_real_total: 0x210408d9,
-            cpu_run_virtual_total: 0x267aa10c,
-            ac_comm: [
-                73, 79, 73, 74, 65, 0x6d, 64, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0,
-            ],
-            ac_sched: 0,
-            ac_pad: [0, 0, 0],
-            __pad: [0, 0, 0, 0],
-            ac_uid: 0,
-            ac_gid: 0,
-            ac_pid: 1,
-            ac_ppid: 0,
-            ac_btime: 0x419bf2e0,
-            ac_etime: 0x1fbbc7a2,
-            ac_utime: 0x32c2c,
-            ac_stime: 0x9e31a,
-            ac_minflt: 0x2a1b,
-            ac_majflt: 0xa2,
-            coremem: 0x29aa0b,
-            virtmem: 0x140ffc3,
-            hiwater_rss: 0x1cd4,
-            hiwater_vm: 0x38a1e,
-            read_char: 0xaa000,
-            write_char: 0x4a00,
-            read_syscalls: 0xa00,
-            write_syscalls: 0x800,
-            read_bytes: 0x104fc00,
-            write_bytes: 0,
-            cancelled_write_bytes: 0,
-            nvcsw: 0x6b9,
-            nivcsw: 0x1b0,
-            ac_utimescaled: 0x32c2c,
-            ac_stimescaled: 0x9e31a,
-            cpu_scaled_run_real_total: 0x210408d9,
-            freepages_count: 0,
-            freepages_delay_total: 0,
-            thrashing_count: 0,
-            thrashing_delay_total: 0,
-            ac_btime64: 0x419bf2e0,
-            compact_count: 0,
-            compact_delay_total: 0,
-            ac_tgid: 0x1,
-            ac_tgetime: 0x1fbbc7a2,
-            ac_exe_dev: 0x10301,
-            ac_exe_inode: 0xd6b,
-            wpcopy_count: 0x121c,
-            wpcopy_delay_total: 0xe4d80d,
-        });
+        let nla = TaskstatsTypeAttrs::AggrPid(
+            123,
+            Taskstats {
+                version: 0xd,
+                ac_exitcode: 0,
+                ac_flag: 0x2,
+                ac_nice: 0,
+                cpu_count: 0x0842,
+                cpu_delay_total: 0x6e75ebf,
+                blkio_count: 0x1fc,
+                blkio_delay_total: 0xd30338c,
+                swapin_count: 0,
+                swapin_delay_total: 0,
+                cpu_run_real_total: 0x210408d9,
+                cpu_run_virtual_total: 0x267aa10c,
+                ac_comm: [
+                    73, 79, 73, 74, 65, 0x6d, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ],
+                ac_sched: 0,
+                ac_pad: [0, 0, 0],
+                __pad: [0, 0, 0, 0],
+                ac_uid: 0,
+                ac_gid: 0,
+                ac_pid: 1,
+                ac_ppid: 0,
+                ac_btime: 0x419bf2e0,
+                ac_etime: 0x1fbbc7a2,
+                ac_utime: 0x32c2c,
+                ac_stime: 0x9e31a,
+                ac_minflt: 0x2a1b,
+                ac_majflt: 0xa2,
+                coremem: 0x29aa0b,
+                virtmem: 0x140ffc3,
+                hiwater_rss: 0x1cd4,
+                hiwater_vm: 0x38a1e,
+                read_char: 0xaa000,
+                write_char: 0x4a00,
+                read_syscalls: 0xa00,
+                write_syscalls: 0x800,
+                read_bytes: 0x104fc00,
+                write_bytes: 0,
+                cancelled_write_bytes: 0,
+                nvcsw: 0x6b9,
+                nivcsw: 0x1b0,
+                ac_utimescaled: 0x32c2c,
+                ac_stimescaled: 0x9e31a,
+                cpu_scaled_run_real_total: 0x210408d9,
+                freepages_count: 0,
+                freepages_delay_total: 0,
+                thrashing_count: 0,
+                thrashing_delay_total: 0,
+                ac_btime64: 0x419bf2e0,
+                compact_count: 0,
+                compact_delay_total: 0,
+                ac_tgid: 0x1,
+                ac_tgetime: 0x1fbbc7a2,
+                ac_exe_dev: 0x10301,
+                ac_exe_inode: 0xd6b,
+                wpcopy_count: 0x121c,
+                wpcopy_delay_total: 0xe4d80d,
+            },
+        );
         let mut buffer = vec![0; nla.buffer_len()];
         nla.emit(&mut buffer);
         assert_eq!(nla.buffer_len(), 432);
 
-        let parsed_nla = TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
+        let parsed_nla =
+            TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&buffer).unwrap()).unwrap();
         assert_eq!(parsed_nla, nla);
     }
 }

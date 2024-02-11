@@ -3,9 +3,15 @@ use std::mem::size_of;
 use anyhow::{anyhow, bail, Context, Result};
 
 use clap::{arg, Parser};
-use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
-use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST};
-use netlink_packet_generic::{constants::GENL_ID_CTRL, GenlMessage, ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs}};
+use netlink_packet_core::{
+    NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST,
+};
+use netlink_packet_generic::{
+    constants::GENL_ID_CTRL,
+    ctrl::{nlas::GenlCtrlAttrs, GenlCtrl, GenlCtrlCmd},
+    GenlMessage,
+};
+use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
 
 mod taskstats_packet;
 use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
@@ -19,10 +25,13 @@ fn create_nl_socket() -> Result<Socket> {
 
     Ok(socket)
 }
-fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_type: u16, nlmsg_pid: u32, payload: NetlinkPayload<T>) -> Result<()> {
-    let mut netlink_message = NetlinkMessage::new(
-        NetlinkHeader::default(), payload
-    );
+fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(
+    socket: &Socket,
+    nlmsg_type: u16,
+    nlmsg_pid: u32,
+    payload: NetlinkPayload<T>,
+) -> Result<()> {
+    let mut netlink_message = NetlinkMessage::new(NetlinkHeader::default(), payload);
     netlink_message.header.message_type = nlmsg_type;
     netlink_message.header.flags = NLM_F_REQUEST;
     netlink_message.header.sequence_number = 0;
@@ -31,7 +40,6 @@ fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(socket: &Socket, nlmsg_typ
 
     let mut buf = vec![0u8; netlink_message.buffer_len()];
     netlink_message.serialize(&mut buf[..]);
-
 
     let mut sent = 0;
     while sent < buf.len() {
@@ -49,10 +57,15 @@ const TASKSTATS_GENL_NAME: &str = "TASKSTATS";
 fn get_family_id(socket: &Socket) -> Result<u16> {
     let mut genlmsg = GenlMessage::from_payload(GenlCtrl {
         cmd: GenlCtrlCmd::GetFamily,
-        nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())]
+        nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())],
     });
     genlmsg.finalize();
-    send_cmd(socket, GENL_ID_CTRL, std::process::id(), NetlinkPayload::from(genlmsg))?;
+    send_cmd(
+        socket,
+        GENL_ID_CTRL,
+        std::process::id(),
+        NetlinkPayload::from(genlmsg),
+    )?;
 
     let mut rxbuf = vec![0; 4096];
     let rep_len = socket.recv(&mut &mut rxbuf[..], 0)?;
@@ -61,12 +74,15 @@ fn get_family_id(socket: &Socket) -> Result<u16> {
 
     if let NetlinkPayload::InnerMessage(genlmsg) = msg.payload {
         if GenlCtrlCmd::NewFamily == genlmsg.payload.cmd {
-            return genlmsg.payload.nlas.iter().find_map(|nla| {
-                match nla {
+            return genlmsg
+                .payload
+                .nlas
+                .iter()
+                .find_map(|nla| match nla {
                     GenlCtrlAttrs::FamilyId(id) => Some(*id),
-                    _ => None
-                }
-            }).ok_or(anyhow!("family id not found"))
+                    _ => None,
+                })
+                .ok_or(anyhow!("family id not found"));
         }
     }
 
@@ -74,22 +90,10 @@ fn get_family_id(socket: &Socket) -> Result<u16> {
 }
 
 fn average_ms_f64(total: u64, count: u64) -> f64 {
-    total as f64 / 1000000.0 / (
-        if count != 0 {
-            count
-        } else {
-            1
-        }
-    ) as f64
+    total as f64 / 1000000.0 / (if count != 0 { count } else { 1 }) as f64
 }
 fn average_ms_u64(total: u64, count: u64) -> u64 {
-    total / 1000000 / (
-        if count != 0 {
-            count
-        } else {
-            1
-        }
-    )
+    total / 1000000 / (if count != 0 { count } else { 1 })
 }
 
 fn print_delayacct(t: &Taskstats) {
@@ -167,20 +171,16 @@ fn print_delayacct(t: &Taskstats) {
     );
 }
 fn task_context_switch_counts(t: &Taskstats) {
-    println!(
-        "\n\nTask   {:>15}{:>15}",
-        "voluntary", "nonvoluntary"
-    );
-    println!(
-        "       {:>15}{:>15}",
-        t.nvcsw, t.nivcsw
-    );
+    println!("\n\nTask   {:>15}{:>15}", "voluntary", "nonvoluntary");
+    println!("       {:>15}{:>15}", t.nvcsw, t.nivcsw);
 }
 fn print_ioacct(t: &Taskstats) {
     println!(
         "{}: read={} write={} cancelled_write={}",
         String::from_utf8_lossy(&t.ac_comm),
-        t.read_bytes, t.write_bytes, t.cancelled_write_bytes
+        t.read_bytes,
+        t.write_bytes,
+        t.cancelled_write_bytes
     );
 }
 
@@ -198,7 +198,6 @@ struct Args {
     #[arg(short = 'p')]
     pid: u32,
 }
-
 
 pub fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -218,7 +217,7 @@ pub fn main() -> Result<()> {
 
     let socket = create_nl_socket().context("error creating Netlink socket")?;
     let family_id = get_family_id(&socket).context("Error getting family id")?;
-    
+
     if family_id == 0 {
         bail!("Error getting family id");
     }
@@ -227,26 +226,42 @@ pub fn main() -> Result<()> {
     if args.pid != 0 {
         let mut genlmsg = GenlMessage::from_payload(TaskstatsCtrl {
             cmd: TaskstatsCmd::Get,
-            nlas: vec![TaskstatsCmdAttrs::Pid(args.pid)]
+            nlas: vec![TaskstatsCmdAttrs::Pid(args.pid)],
         });
         genlmsg.set_resolved_family_id(family_id);
         genlmsg.finalize();
-        send_cmd(&socket, family_id, std::process::id(), NetlinkPayload::from(genlmsg)).context("error sending tid/tgid cmd")?;
+        send_cmd(
+            &socket,
+            family_id,
+            std::process::id(),
+            NetlinkPayload::from(genlmsg),
+        )
+        .context("error sending tid/tgid cmd")?;
 
         debug!("Sent pid/tgid, retval 0");
     }
 
     let mut rxbuf = vec![0; 4096];
-    let rep_len =  socket.recv(&mut &mut rxbuf[..], 0).context("nonfatal reply error")?; // TODO: handle nonfatal reply error
+    let rep_len = socket
+        .recv(&mut &mut rxbuf[..], 0)
+        .context("nonfatal reply error")?; // TODO: handle nonfatal reply error
     debug!("received {} bytes", rep_len);
 
-    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(&rxbuf[0..(rep_len as usize)]).context("fatal reply error: unable to parse Netlink Packet")?;
-    debug!("nlmsghdr size={}, nlmsg_len={}, rep_len={}", size_of::<NetlinkHeader>(), response.buffer_len(), rep_len);
+    let response = <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(
+        &rxbuf[0..(rep_len as usize)],
+    )
+    .context("fatal reply error: unable to parse Netlink Packet")?;
+    debug!(
+        "nlmsghdr size={}, nlmsg_len={}, rep_len={}",
+        size_of::<NetlinkHeader>(),
+        response.buffer_len(),
+        rep_len
+    );
 
     match response.payload {
         NetlinkPayload::Error(err) => {
             bail!("fatal reply error: {}", err);
-        },
+        }
         NetlinkPayload::InnerMessage(genlmsg) => {
             for nla in genlmsg.payload.nlas.iter() {
                 match nla {
@@ -254,12 +269,12 @@ pub fn main() -> Result<()> {
                         if args.print_delays {
                             println!("PID\t{}", rtid);
                         }
-                    },
+                    }
                     TaskstatsTypeAttrs::Tgid(rtid) => {
                         if args.print_delays {
                             println!("TGID\t{}", rtid);
                         }
-                    },
+                    }
                     TaskstatsTypeAttrs::Stats(stats) => {
                         if args.print_delays {
                             print_delayacct(stats);
@@ -270,7 +285,7 @@ pub fn main() -> Result<()> {
                         if args.print_task_context_switch_counts {
                             task_context_switch_counts(stats);
                         }
-                    },
+                    }
                     TaskstatsTypeAttrs::AggrPid(rtid, stats) => {
                         if args.print_delays {
                             println!("PID\t{}", rtid);
@@ -282,7 +297,7 @@ pub fn main() -> Result<()> {
                         if args.print_task_context_switch_counts {
                             task_context_switch_counts(stats);
                         }
-                    },
+                    }
                     TaskstatsTypeAttrs::AggrTgid(rtid, stats) => {
                         if args.print_delays {
                             println!("PID\t{}", rtid);
@@ -294,17 +309,15 @@ pub fn main() -> Result<()> {
                         if args.print_task_context_switch_counts {
                             task_context_switch_counts(stats);
                         }
-                    },
-                    TaskstatsTypeAttrs::Null => {
-                    },
+                    }
+                    TaskstatsTypeAttrs::Null => {}
                     _ => {
                         warn!("Unknown nla_type {:?}", nla);
                     }
                 }
             }
         }
-        _ => {
-        }
+        _ => {}
     }
 
     Ok(())

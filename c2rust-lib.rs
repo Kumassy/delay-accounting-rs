@@ -7,5 +7,4 @@
 #![allow(unused_mut)]
 #![feature(extern_types)]
 
-
 extern crate libc;
