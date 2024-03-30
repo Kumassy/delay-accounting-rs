@@ -1,93 +1,16 @@
 use std::mem::size_of;
 
-use anyhow::{anyhow, bail, Context, Result};
-
+use anyhow::{bail, Context, Result};
 use clap::{arg, Parser};
-use netlink_packet_core::{
-    NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST,
-};
-use netlink_packet_generic::{
-    constants::GENL_ID_CTRL,
-    ctrl::{nlas::GenlCtrlAttrs, GenlCtrl, GenlCtrlCmd},
-    GenlMessage,
-};
-use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
+use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload};
+use netlink_packet_generic::GenlMessage;
 
-mod taskstats_packet;
-use taskstats_packet::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
+use getdelays_rs::{
+    create_nl_socket, get_family_id, send_delay_request,
+    taskstats::{Taskstats, TaskstatsCtrl, TaskstatsTypeAttrs},
+};
 
-use crate::taskstats_packet::{Taskstats, TaskstatsTypeAttrs};
 use log::*;
-
-fn create_nl_socket() -> Result<Socket> {
-    let mut socket = Socket::new(NETLINK_GENERIC)?;
-    socket.bind_auto()?;
-
-    Ok(socket)
-}
-fn send_cmd<T: NetlinkSerializable + std::fmt::Debug>(
-    socket: &Socket,
-    nlmsg_type: u16,
-    nlmsg_pid: u32,
-    payload: NetlinkPayload<T>,
-) -> Result<()> {
-    let mut netlink_message = NetlinkMessage::new(NetlinkHeader::default(), payload);
-    netlink_message.header.message_type = nlmsg_type;
-    netlink_message.header.flags = NLM_F_REQUEST;
-    netlink_message.header.sequence_number = 0;
-    netlink_message.header.port_number = nlmsg_pid;
-    netlink_message.finalize();
-
-    let mut buf = vec![0u8; netlink_message.buffer_len()];
-    netlink_message.serialize(&mut buf[..]);
-
-    let mut sent = 0;
-    while sent < buf.len() {
-        let r = socket.send_to(&buf[sent..], &SocketAddr::new(0, 0), 0)?;
-        if r > 0 {
-            sent += r;
-        } else {
-            return Err(anyhow!("failed to send packet to netlink socket"));
-        }
-    }
-    Ok(())
-}
-const TASKSTATS_GENL_NAME: &str = "TASKSTATS";
-
-fn get_family_id(socket: &Socket) -> Result<u16> {
-    let mut genlmsg = GenlMessage::from_payload(GenlCtrl {
-        cmd: GenlCtrlCmd::GetFamily,
-        nlas: vec![GenlCtrlAttrs::FamilyName(TASKSTATS_GENL_NAME.to_string())],
-    });
-    genlmsg.finalize();
-    send_cmd(
-        socket,
-        GENL_ID_CTRL,
-        std::process::id(),
-        NetlinkPayload::from(genlmsg),
-    )?;
-
-    let mut rxbuf = vec![0; 4096];
-    let rep_len = socket.recv(&mut &mut rxbuf[..], 0)?;
-
-    let msg = <NetlinkMessage<GenlMessage<GenlCtrl>>>::deserialize(&rxbuf[0..rep_len])?;
-
-    if let NetlinkPayload::InnerMessage(genlmsg) = msg.payload {
-        if GenlCtrlCmd::NewFamily == genlmsg.payload.cmd {
-            return genlmsg
-                .payload
-                .nlas
-                .iter()
-                .find_map(|nla| match nla {
-                    GenlCtrlAttrs::FamilyId(id) => Some(*id),
-                    _ => None,
-                })
-                .ok_or(anyhow!("family id not found"));
-        }
-    }
-
-    Err(anyhow!("unexpected response"))
-}
 
 fn average_ms_f64(total: u64, count: u64) -> f64 {
     total as f64 / 1000000.0 / (if count != 0 { count } else { 1 }) as f64
@@ -224,20 +147,7 @@ pub fn main() -> Result<()> {
     debug!("family id {}", family_id);
 
     if args.pid != 0 {
-        let mut genlmsg = GenlMessage::from_payload(TaskstatsCtrl {
-            cmd: TaskstatsCmd::Get,
-            nlas: vec![TaskstatsCmdAttrs::Pid(args.pid)],
-        });
-        genlmsg.set_resolved_family_id(family_id);
-        genlmsg.finalize();
-        send_cmd(
-            &socket,
-            family_id,
-            std::process::id(),
-            NetlinkPayload::from(genlmsg),
-        )
-        .context("error sending tid/tgid cmd")?;
-
+        send_delay_request(&socket, family_id, args.pid)?;
         debug!("Sent pid/tgid, retval 0");
     }
 
