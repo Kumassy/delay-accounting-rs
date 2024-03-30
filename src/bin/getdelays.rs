@@ -2,12 +2,13 @@ use std::mem::size_of;
 
 use anyhow::{bail, Context, Result};
 use clap::{arg, Parser};
-use netlink_packet_core::{
-    NetlinkHeader, NetlinkMessage, NetlinkPayload,
-};
+use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload};
 use netlink_packet_generic::GenlMessage;
 
-use getdelays_rs::{create_nl_socket, get_family_id, send_delay_request, taskstats::{Taskstats, TaskstatsCtrl, TaskstatsTypeAttrs}};
+use getdelays_rs::{
+    create_nl_socket, get_family_id, send_delay_request,
+    taskstats::{Taskstats, TaskstatsCtrl, TaskstatsTypeAttrs},
+};
 
 use log::*;
 

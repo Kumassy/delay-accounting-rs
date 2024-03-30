@@ -1,7 +1,13 @@
-use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST};
-use netlink_packet_generic::{constants::GENL_ID_CTRL, ctrl::{nlas::GenlCtrlAttrs, GenlCtrl, GenlCtrlCmd}, GenlMessage};
-use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
 use anyhow::{anyhow, Context, Result};
+use netlink_packet_core::{
+    NetlinkHeader, NetlinkMessage, NetlinkPayload, NetlinkSerializable, NLM_F_REQUEST,
+};
+use netlink_packet_generic::{
+    constants::GENL_ID_CTRL,
+    ctrl::{nlas::GenlCtrlAttrs, GenlCtrl, GenlCtrlCmd},
+    GenlMessage,
+};
+use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
 
 use crate::taskstats::{TaskstatsCmd, TaskstatsCmdAttrs, TaskstatsCtrl};
 
