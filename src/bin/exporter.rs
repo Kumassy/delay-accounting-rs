@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use getdelays_rs::{
     create_nl_socket, get_family_id, send_delay_request,
     taskstats::{Taskstats, TaskstatsCtrl, TaskstatsTypeAttrs},
@@ -8,7 +9,7 @@ use log::*;
 use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload};
 use netlink_packet_generic::GenlMessage;
 use prometheus_exporter::prometheus::{register_int_gauge_vec, IntGaugeVec};
-use std::{ffi::CStr, mem::size_of, net::SocketAddr, sync::Arc};
+use std::{ffi::CStr, mem::size_of, net::{IpAddr, Ipv4Addr, SocketAddr}, sync::Arc};
 
 fn update_metrics(stats: &Taskstats) {
     let comm = CStr::from_bytes_until_nul(&stats.ac_comm).map_or("".into(), CStr::to_string_lossy);
@@ -273,8 +274,17 @@ lazy_static! {
     static ref IRQ_DELAY_TOTAL: IntGaugeVec = register_int_gauge_vec!("delay_accounting_irq_delay_total", "Delay waiting for IRQ/SOFTIRQ", &["pid", "comm"]).unwrap();
 }
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short = 'i', long, default_value = "30", help = "interval in seconds to send delay request")]
+    interval: u64,
+    #[arg(short = 'p', long, default_value = "9186", help = "the port this exporter listens on")]
+    port: u16,
+}
+
 fn main() -> Result<()> {
     pretty_env_logger::init_timed();
+    let args = Args::parse();
 
     let socket = create_nl_socket().context("error creating Netlink socket")?;
     let socket = Arc::new(socket);
@@ -341,16 +351,16 @@ fn main() -> Result<()> {
         }
     });
 
-    let addr: SocketAddr = "0.0.0.0:9186".parse()?;
-    let exporter = prometheus_exporter::start(addr)?;
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), args.port);
+    let exporter = prometheus_exporter::start(addr).context("failed to start exporter")?;
 
     // list pids of all processes in the system
     loop {
-        let _guard = exporter.wait_duration(std::time::Duration::from_secs(5));
+        let _guard = exporter.wait_duration(std::time::Duration::from_secs(args.interval));
 
-        let pids = procfs::process::all_processes().context("failed to list pids")?;
-        for pid in pids {
-            let pid = pid?.pid;
+        let processes = procfs::process::all_processes().context("failed to list pids")?;
+        for process in processes.flatten() {
+            let pid = process.pid;
             debug!("send delay request for pid {}", pid);
             send_delay_request(&socket, family_id, pid as u32)?;
         }
