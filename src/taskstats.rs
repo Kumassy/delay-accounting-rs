@@ -248,18 +248,48 @@ pub struct Taskstats {
     pub cpu_scaled_run_real_total: u64,
     pub freepages_count: u64,
     pub freepages_delay_total: u64,
+
+    // // v9
     pub thrashing_count: u64,
     pub thrashing_delay_total: u64,
+
+    // // v10
     pub ac_btime64: u64,
+
+    // // v11
     pub compact_count: u64,
     pub compact_delay_total: u64,
+
+    // // v12
     pub ac_tgid: u32,
     pub ac_tgetime: u64,
     pub ac_exe_dev: u64,
     pub ac_exe_inode: u64,
+
+    // // v13
     pub wpcopy_count: u64,
     pub wpcopy_delay_total: u64,
+
+    // v14
+    // pub irq_count: u64,
+    // pub irq_delay_total: u64,
 }
+
+fn size_of_taskstats(version: u16) -> usize {
+    match version {
+        7 | 8 => 328,
+        9 => 344,
+        10 => 352,
+        11 => 368,
+        12 => 400,
+        13 => 416,
+        14 => 432,
+        _ => 0,
+    }
+}
+
+pub const TAKSTATS_SUPPORTED_VERSION_MIN: u16 = 7;
+pub const TAKSTATS_SUPPORTED_VERSION_MAX: u16 = 14;
 
 pub const TASKSTATS_TYPE_NULL: u16 = 6;
 pub const TASKSTATS_TYPE_AGGR_TGID: u16 = 5;
@@ -276,7 +306,7 @@ impl Nla for TaskstatsTypeAttrs {
             Unspec => 0,
             Pid(v) => size_of_val(v),
             Tgid(v) => size_of_val(v),
-            Stats(s) => size_of_val(s),
+            Stats(s) => size_of_taskstats(s.version),
             AggrPid(v, s) => {
                 let nla_pid = TaskstatsTypeAttrs::Pid(*v);
                 let nla_stats = TaskstatsTypeAttrs::Stats(*s);
@@ -313,8 +343,82 @@ impl Nla for TaskstatsTypeAttrs {
             Pid(v) => NativeEndian::write_u32(buffer, *v),
             Tgid(v) => NativeEndian::write_u32(buffer, *v),
             Stats(s) => {
-                let bytes: [u8; size_of::<Taskstats>()] = unsafe { std::mem::transmute(*s) };
-                buffer.copy_from_slice(&bytes);
+                if s.version < TAKSTATS_SUPPORTED_VERSION_MIN
+                    || s.version > TAKSTATS_SUPPORTED_VERSION_MAX
+                {
+                    return;
+                }
+
+                NativeEndian::write_u16(&mut buffer[0..2], s.version);
+                NativeEndian::write_u32(&mut buffer[4..8], s.ac_exitcode);
+                buffer[8] = s.ac_flag;
+                buffer[9] = s.ac_nice;
+                // hole: 6 bytes
+                NativeEndian::write_u64(&mut buffer[16..24], s.cpu_count);
+                NativeEndian::write_u64(&mut buffer[24..32], s.cpu_delay_total);
+                NativeEndian::write_u64(&mut buffer[32..40], s.blkio_count);
+                NativeEndian::write_u64(&mut buffer[40..48], s.blkio_delay_total);
+                NativeEndian::write_u64(&mut buffer[48..56], s.swapin_count);
+                NativeEndian::write_u64(&mut buffer[56..64], s.swapin_delay_total);
+                NativeEndian::write_u64(&mut buffer[64..72], s.cpu_run_real_total);
+                NativeEndian::write_u64(&mut buffer[72..80], s.cpu_run_virtual_total);
+                buffer[80..112].copy_from_slice(&s.ac_comm);
+                buffer[112] = s.ac_sched;
+                buffer[113..116].copy_from_slice(&s.ac_pad);
+                buffer[116..120].copy_from_slice(&s.__pad);  // __pad, hole: 4 bytes
+                NativeEndian::write_u32(&mut buffer[120..124], s.ac_uid);
+                NativeEndian::write_u32(&mut buffer[124..128], s.ac_gid);
+                NativeEndian::write_u32(&mut buffer[128..132], s.ac_pid);
+                NativeEndian::write_u32(&mut buffer[132..136], s.ac_ppid);
+                NativeEndian::write_u32(&mut buffer[136..140], s.ac_btime);
+                // hole: 4 bytes
+                NativeEndian::write_u64(&mut buffer[144..152], s.ac_etime);
+                NativeEndian::write_u64(&mut buffer[152..160], s.ac_utime);
+                NativeEndian::write_u64(&mut buffer[160..168], s.ac_stime);
+                NativeEndian::write_u64(&mut buffer[168..176], s.ac_minflt);
+                NativeEndian::write_u64(&mut buffer[176..184], s.ac_majflt);
+                NativeEndian::write_u64(&mut buffer[184..192], s.coremem);
+                NativeEndian::write_u64(&mut buffer[192..200], s.virtmem);
+                NativeEndian::write_u64(&mut buffer[200..208], s.hiwater_rss);
+                NativeEndian::write_u64(&mut buffer[208..216], s.hiwater_vm);
+                NativeEndian::write_u64(&mut buffer[216..224], s.read_char);
+                NativeEndian::write_u64(&mut buffer[224..232], s.write_char);
+                NativeEndian::write_u64(&mut buffer[232..240], s.read_syscalls);
+                NativeEndian::write_u64(&mut buffer[240..248], s.write_syscalls);
+                NativeEndian::write_u64(&mut buffer[248..256], s.read_bytes);
+                NativeEndian::write_u64(&mut buffer[256..264], s.write_bytes);
+                NativeEndian::write_u64(&mut buffer[264..272], s.cancelled_write_bytes);
+                NativeEndian::write_u64(&mut buffer[272..280], s.nvcsw);
+                NativeEndian::write_u64(&mut buffer[280..288], s.nivcsw);
+                NativeEndian::write_u64(&mut buffer[288..296], s.ac_utimescaled);
+                NativeEndian::write_u64(&mut buffer[296..304], s.ac_stimescaled);
+                NativeEndian::write_u64(&mut buffer[304..312], s.cpu_scaled_run_real_total);
+                NativeEndian::write_u64(&mut buffer[312..320], s.freepages_count);
+                NativeEndian::write_u64(&mut buffer[320..328], s.freepages_delay_total);
+
+                if s.version >= 9 {
+                    NativeEndian::write_u64(&mut buffer[328..336], s.thrashing_count);
+                    NativeEndian::write_u64(&mut buffer[336..344], s.thrashing_delay_total);
+
+                }
+                if s.version >= 10 {
+                    NativeEndian::write_u64(&mut buffer[344..352], s.ac_btime64);
+                }
+                if s.version >= 11 {
+                    NativeEndian::write_u64(&mut buffer[352..360], s.compact_count);
+                    NativeEndian::write_u64(&mut buffer[360..368], s.compact_delay_total);
+                }
+                if s.version >= 12 {
+                    NativeEndian::write_u32(&mut buffer[368..372], s.ac_tgid);
+                    // hole: 4 bytes
+                    NativeEndian::write_u64(&mut buffer[376..384], s.ac_tgetime);
+                    NativeEndian::write_u64(&mut buffer[384..392], s.ac_exe_dev);
+                    NativeEndian::write_u64(&mut buffer[392..400], s.ac_exe_inode);
+                }
+                if s.version >= 13 {
+                    NativeEndian::write_u64(&mut buffer[400..408], s.wpcopy_count);
+                    NativeEndian::write_u64(&mut buffer[408..416], s.wpcopy_delay_total);
+                }
             }
             AggrPid(v, s) => {
                 let nla_pid = TaskstatsTypeAttrs::Pid(*v);
