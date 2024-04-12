@@ -7,7 +7,7 @@ use netlink_packet_utils::{
     traits::*,
     DecodeError,
 };
-use std::mem::{size_of, size_of_val};
+use std::mem::size_of_val;
 
 /// Command code definition of Taskstats family
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -440,13 +440,86 @@ impl Nla for TaskstatsTypeAttrs {
 }
 
 fn parse_taskstats(payload: &[u8]) -> Result<Taskstats, DecodeError> {
-    if payload.len() != size_of::<Taskstats>() {
+    let version = NativeEndian::read_u16(&payload[0..2]);
+    if payload.len() != size_of_taskstats(version) {
         return Err(format!("invalid Taskstats length: {}", payload.len()).into());
     }
 
-    let mut bytes = [0; size_of::<Taskstats>()];
-    bytes.copy_from_slice(&payload[..size_of::<Taskstats>()]);
-    Ok(unsafe { std::mem::transmute(bytes) })
+    let mut taskstat = Taskstats {
+        version,
+        ac_exitcode: NativeEndian::read_u32(&payload[4..8]),
+        ac_flag: payload[8],
+        ac_nice: payload[9],
+        // hole: 6 bytes
+        cpu_count: NativeEndian::read_u64(&payload[16..24]),
+        cpu_delay_total: NativeEndian::read_u64(&payload[24..32]),
+        blkio_count: NativeEndian::read_u64(&payload[32..40]),
+        blkio_delay_total: NativeEndian::read_u64(&payload[40..48]),
+        swapin_count: NativeEndian::read_u64(&payload[48..56]),
+        swapin_delay_total: NativeEndian::read_u64(&payload[56..64]),
+        cpu_run_real_total: NativeEndian::read_u64(&payload[64..72]),
+        cpu_run_virtual_total: NativeEndian::read_u64(&payload[72..80]),
+        ac_comm: payload[80..112].try_into().map_err(|e| format!("invalid ac_comm: {}", e))?,
+        ac_sched: payload[112],
+        ac_pad: payload[113..116].try_into().map_err(|e| format!("invalid ac_pad: {}", e))?,
+        __pad: payload[116..120].try_into().map_err(|e| format!("invalid __pad: {}", e))?, // __pad, hole: 4 bytes
+        ac_uid: NativeEndian::read_u32(&payload[120..124]),
+        ac_gid: NativeEndian::read_u32(&payload[124..128]),
+        ac_pid: NativeEndian::read_u32(&payload[128..132]),
+        ac_ppid: NativeEndian::read_u32(&payload[132..136]),
+        ac_btime: NativeEndian::read_u32(&payload[136..140]),
+        // hole: 4 bytes
+        ac_etime: NativeEndian::read_u64(&payload[144..152]),
+        ac_utime: NativeEndian::read_u64(&payload[152..160]),
+        ac_stime: NativeEndian::read_u64(&payload[160..168]),
+        ac_minflt: NativeEndian::read_u64(&payload[168..176]),
+        ac_majflt: NativeEndian::read_u64(&payload[176..184]),
+        coremem: NativeEndian::read_u64(&payload[184..192]),
+        virtmem: NativeEndian::read_u64(&payload[192..200]),
+        hiwater_rss: NativeEndian::read_u64(&payload[200..208]),
+        hiwater_vm: NativeEndian::read_u64(&payload[208..216]),
+        read_char: NativeEndian::read_u64(&payload[216..224]),
+        write_char: NativeEndian::read_u64(&payload[224..232]),
+        read_syscalls: NativeEndian::read_u64(&payload[232..240]),
+        write_syscalls: NativeEndian::read_u64(&payload[240..248]),
+        read_bytes: NativeEndian::read_u64(&payload[248..256]),
+        write_bytes: NativeEndian::read_u64(&payload[256..264]),
+        cancelled_write_bytes: NativeEndian::read_u64(&payload[264..272]),
+        nvcsw: NativeEndian::read_u64(&payload[272..280]),
+        nivcsw: NativeEndian::read_u64(&payload[280..288]),
+        ac_utimescaled: NativeEndian::read_u64(&payload[288..296]),
+        ac_stimescaled: NativeEndian::read_u64(&payload[296..304]),
+        cpu_scaled_run_real_total: NativeEndian::read_u64(&payload[304..312]),
+        freepages_count: NativeEndian::read_u64(&payload[312..320]),
+        freepages_delay_total: NativeEndian::read_u64(&payload[320..328]),
+
+        ..Default::default()
+    };
+
+    if version >= 9 {
+        taskstat.thrashing_count = NativeEndian::read_u64(&payload[328..336]);
+        taskstat.thrashing_delay_total = NativeEndian::read_u64(&payload[336..344]);
+    }
+    if version >= 10 {
+        taskstat.ac_btime64 = NativeEndian::read_u64(&payload[344..352]);
+    }
+    if version >= 11 {
+        taskstat.compact_count = NativeEndian::read_u64(&payload[352..360]);
+        taskstat.compact_delay_total = NativeEndian::read_u64(&payload[360..368]);
+    }
+    if version >= 12 {
+        taskstat.ac_tgid = NativeEndian::read_u32(&payload[368..372]);
+        // hole: 4 bytes
+        taskstat.ac_tgetime = NativeEndian::read_u64(&payload[376..384]);
+        taskstat.ac_exe_dev = NativeEndian::read_u64(&payload[384..392]);
+        taskstat.ac_exe_inode = NativeEndian::read_u64(&payload[392..400]);
+    }
+    if version >= 13 {
+        taskstat.wpcopy_count = NativeEndian::read_u64(&payload[400..408]);
+        taskstat.wpcopy_delay_total = NativeEndian::read_u64(&payload[408..416]);
+    }
+
+    Ok(taskstat)
 }
 
 impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for TaskstatsTypeAttrs {
