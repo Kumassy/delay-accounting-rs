@@ -92,6 +92,16 @@ fn print_delayacct(t: &Taskstats) {
         t.wpcopy_delay_total,
         average_ms_u64(t.wpcopy_delay_total, t.wpcopy_count)
     );
+    println!(
+        "IRQ   {:>15}{:>15}{:>15}",
+        "count", "delay total", "delay average"
+    );
+    println!(
+        "      {:>15}{:>15}{:>15}ms",
+        t.irq_count,
+        t.irq_delay_total,
+        average_ms_u64(t.irq_delay_total, t.irq_count)
+    );
 }
 fn task_context_switch_counts(t: &Taskstats) {
     println!("\n\nTask   {:>15}{:>15}", "voluntary", "nonvoluntary");
