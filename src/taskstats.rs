@@ -271,8 +271,8 @@ pub struct Taskstats {
     pub wpcopy_delay_total: u64,
 
     // v14
-    // pub irq_count: u64,
-    // pub irq_delay_total: u64,
+    pub irq_count: u64,
+    pub irq_delay_total: u64,
 }
 
 fn size_of_taskstats(version: u16) -> usize {
@@ -419,6 +419,10 @@ impl Nla for TaskstatsTypeAttrs {
                     NativeEndian::write_u64(&mut buffer[400..408], s.wpcopy_count);
                     NativeEndian::write_u64(&mut buffer[408..416], s.wpcopy_delay_total);
                 }
+                if s.version >= 14 {
+                    NativeEndian::write_u64(&mut buffer[416..424], s.irq_count);
+                    NativeEndian::write_u64(&mut buffer[424..432], s.irq_delay_total);
+                }
             }
             AggrPid(v, s) => {
                 let nla_pid = TaskstatsTypeAttrs::Pid(*v);
@@ -517,6 +521,10 @@ fn parse_taskstats(payload: &[u8]) -> Result<Taskstats, DecodeError> {
     if version >= 13 {
         taskstat.wpcopy_count = NativeEndian::read_u64(&payload[400..408]);
         taskstat.wpcopy_delay_total = NativeEndian::read_u64(&payload[408..416]);
+    }
+    if version >= 14 {
+        taskstat.irq_count = NativeEndian::read_u64(&payload[416..424]);
+        taskstat.irq_delay_total = NativeEndian::read_u64(&payload[424..432]);
     }
 
     Ok(taskstat)
@@ -746,6 +754,7 @@ mod tests {
             ac_exe_inode: 0xd6b,
             wpcopy_count: 0x121c,
             wpcopy_delay_total: 0xe4d80d,
+            ..Default::default()
         });
         let parsed_nla =
             TaskstatsTypeAttrs::parse(&NlaBuffer::new_checked(&type_stats_bytes).unwrap()).unwrap();
@@ -889,6 +898,7 @@ mod tests {
             ac_exe_inode: 0xd6b,
             wpcopy_count: 0x121c,
             wpcopy_delay_total: 0xe4d80d,
+            ..Default::default()
         };
         let expected = TaskstatsTypeAttrs::AggrPid(expected_pid, expected_stats);
 
@@ -972,6 +982,7 @@ mod tests {
             ac_exe_inode: 0xd6b,
             wpcopy_count: 0x121c,
             wpcopy_delay_total: 0xe4d80d,
+            ..Default::default()
         });
         let mut buffer = vec![0; nla.buffer_len()];
         nla.emit(&mut buffer);
@@ -1045,6 +1056,7 @@ mod tests {
                 ac_exe_inode: 0xd6b,
                 wpcopy_count: 0x121c,
                 wpcopy_delay_total: 0xe4d80d,
+                ..Default::default()
             },
         );
         let mut buffer = vec![0; nla.buffer_len()];
