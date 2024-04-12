@@ -289,15 +289,25 @@ fn main() -> Result<()> {
     std::thread::spawn(move || loop {
         let mut rxbuf = vec![0; 4096];
 
-        let rep_len = reader_socket.recv(&mut &mut rxbuf[..], 0).unwrap();
+        let rep_len = match reader_socket.recv(&mut &mut rxbuf[..], 0) {
+            Ok(len) => len,
+            Err(e) => {
+                error!("failed to receive message {}", e);
+                continue;
+            }
+        };
         debug!("received {} bytes", rep_len);
 
         let response =
-            <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(
+            match <NetlinkMessage<GenlMessage<TaskstatsCtrl<TaskstatsTypeAttrs>>>>::deserialize(
                 &rxbuf[0..(rep_len as usize)],
-            )
-            .context("fatal reply error: unable to parse Netlink Packet")
-            .unwrap();
+            ) {
+                Ok(response) => response,
+                Err(e) => {
+                    error!("failed to deserialize message {}", e);
+                    continue;
+                }
+            };
         debug!(
             "nlmsghdr size={}, nlmsg_len={}, rep_len={}",
             size_of::<NetlinkHeader>(),
@@ -308,6 +318,11 @@ fn main() -> Result<()> {
         match response.payload {
             NetlinkPayload::Error(err) => {
                 error!("fatal reply error: {}", err);
+                return;
+            }
+            NetlinkPayload::Done(_) => {
+                info!("closing socket");
+                return;
             }
             NetlinkPayload::InnerMessage(genlmsg) => {
                 for nla in genlmsg.payload.nlas.iter() {
