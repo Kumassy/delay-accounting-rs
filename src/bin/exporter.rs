@@ -191,8 +191,8 @@ fn update_metrics(stats: &Taskstats) {
         .with_label_values(&[&pid.to_string(), &comm])
         .set(stats.wpcopy_delay_total as i64);
 
-    // IRQ_COUNT.with_label_values(&[&pid.to_string(), &comm]).set(stats.irq_count as i64);
-    // IRQ_DELAY_TOTAL.with_label_values(&[&pid.to_string(), &comm]).set(stats.irq_delay_total as i64);
+    IRQ_COUNT.with_label_values(&[&pid.to_string(), &comm]).set(stats.irq_count as i64);
+    IRQ_DELAY_TOTAL.with_label_values(&[&pid.to_string(), &comm]).set(stats.irq_delay_total as i64);
 }
 
 lazy_static! {
@@ -269,8 +269,8 @@ lazy_static! {
     static ref WPCOPY_COUNT: IntGaugeVec = register_int_gauge_vec!("delay_accounting_wpcopy_count", "Delay waiting for write-protect copy", &["pid", "comm"]).unwrap();
     static ref WPCOPY_DELAY_TOTAL: IntGaugeVec = register_int_gauge_vec!("delay_accounting_wpcopy_delay_total", "Delay waiting for write-protect copy", &["pid", "comm"]).unwrap();
 
-    // static ref IRQ_COUNT: IntGaugeVec = register_int_gauge_vec!("delay_accounting_irq_count", "Delay waiting for IRQ/SOFTIRQ", &["pid", "comm"]).unwrap();
-    // static ref IRQ_DELAY_TOTAL: IntGaugeVec = register_int_gauge_vec!("delay_accounting_irq_delay_total", "Delay waiting for IRQ/SOFTIRQ", &["pid", "comm"]).unwrap();
+    static ref IRQ_COUNT: IntGaugeVec = register_int_gauge_vec!("delay_accounting_irq_count", "Delay waiting for IRQ/SOFTIRQ", &["pid", "comm"]).unwrap();
+    static ref IRQ_DELAY_TOTAL: IntGaugeVec = register_int_gauge_vec!("delay_accounting_irq_delay_total", "Delay waiting for IRQ/SOFTIRQ", &["pid", "comm"]).unwrap();
 }
 
 fn main() -> Result<()> {
