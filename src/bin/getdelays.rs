@@ -15,9 +15,6 @@ use log::*;
 fn average_ms_f64(total: u64, count: u64) -> f64 {
     total as f64 / 1000000.0 / (if count != 0 { count } else { 1 }) as f64
 }
-fn average_ms_u64(total: u64, count: u64) -> u64 {
-    total / 1000000 / (if count != 0 { count } else { 1 })
-}
 
 fn print_delayacct(t: &Taskstats) {
     println!(
@@ -37,70 +34,70 @@ fn print_delayacct(t: &Taskstats) {
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.blkio_count,
         t.blkio_delay_total,
-        average_ms_u64(t.blkio_delay_total, t.blkio_count)
+        average_ms_f64(t.blkio_delay_total, t.blkio_count)
     );
     println!(
         "SWAP  {:>15}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.swapin_count,
         t.swapin_delay_total,
-        average_ms_u64(t.swapin_delay_total, t.swapin_count)
+        average_ms_f64(t.swapin_delay_total, t.swapin_count)
     );
     println!(
         "RECLAIM  {:>12}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.freepages_count,
         t.freepages_delay_total,
-        average_ms_u64(t.freepages_delay_total, t.freepages_count)
+        average_ms_f64(t.freepages_delay_total, t.freepages_count)
     );
     println!(
         "THRASHING{:>12}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.thrashing_count,
         t.thrashing_delay_total,
-        average_ms_u64(t.thrashing_delay_total, t.thrashing_count)
+        average_ms_f64(t.thrashing_delay_total, t.thrashing_count)
     );
     println!(
         "COMPACT  {:>12}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.compact_count,
         t.compact_delay_total,
-        average_ms_u64(t.compact_delay_total, t.compact_count)
+        average_ms_f64(t.compact_delay_total, t.compact_count)
     );
     println!(
         "WPCOPY   {:>12}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.wpcopy_count,
         t.wpcopy_delay_total,
-        average_ms_u64(t.wpcopy_delay_total, t.wpcopy_count)
+        average_ms_f64(t.wpcopy_delay_total, t.wpcopy_count)
     );
     println!(
         "IRQ   {:>15}{:>15}{:>15}",
         "count", "delay total", "delay average"
     );
     println!(
-        "      {:>15}{:>15}{:>15}ms",
+        "      {:>15}{:>15}{:>15.3}ms",
         t.irq_count,
         t.irq_delay_total,
-        average_ms_u64(t.irq_delay_total, t.irq_count)
+        average_ms_f64(t.irq_delay_total, t.irq_count)
     );
 }
 fn task_context_switch_counts(t: &Taskstats) {
