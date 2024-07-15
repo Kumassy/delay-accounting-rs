@@ -9,6 +9,7 @@ use log::*;
 use netlink_packet_core::{NetlinkHeader, NetlinkMessage, NetlinkPayload};
 use netlink_packet_generic::GenlMessage;
 use prometheus_exporter::prometheus::{register_int_gauge_vec, IntGaugeVec};
+use regex::Regex;
 use std::{ffi::CStr, mem::size_of, net::{IpAddr, Ipv4Addr, SocketAddr}, sync::Arc};
 
 fn update_metrics(stats: &Taskstats) {
@@ -280,8 +281,8 @@ struct Args {
     interval: u64,
     #[arg(short = 'p', long, default_value = "9186", help = "the port this exporter listens on")]
     port: u16,
-    #[arg(short = 'f', long, help = "only track processes containing substring in comm")]
-    filter: Option<String>,
+    #[arg(short = 'f', long, default_value = ".", help = "only track processes maching regex in comm")]
+    filter: String,
 }
 
 fn main() -> Result<()> {
@@ -291,6 +292,7 @@ fn main() -> Result<()> {
     let socket = create_nl_socket().context("error creating Netlink socket")?;
     let socket = Arc::new(socket);
     let family_id = get_family_id(&socket).context("Error getting family id")?;
+    let comm_filter = Regex::new(&args.filter)?;
 
     if family_id == 0 {
         bail!("Error getting family id");
@@ -362,18 +364,13 @@ fn main() -> Result<()> {
 
         let processes = procfs::process::all_processes().context("failed to list pids")?;
         for process in processes.flatten() {
-            if let Some(ref filter) = args.filter {
-                if let Ok(stat) = process.stat() {
-                    if !stat.comm.contains(&filter.to_string()) {
-                        continue
-                    }
-                } else {
-                    continue
+            if let Ok(stat) = process.stat() {
+                if comm_filter.is_match(&stat.comm) {
+                    let pid = process.pid;
+                    debug!("send delay request for pid {}", pid);
+                    send_delay_request(&socket, family_id, pid as u32)?;
                 }
             }
-            let pid = process.pid;
-            debug!("send delay request for pid {}", pid);
-            send_delay_request(&socket, family_id, pid as u32)?;
         }
     }
 }
