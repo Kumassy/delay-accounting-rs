@@ -280,6 +280,8 @@ struct Args {
     interval: u64,
     #[arg(short = 'p', long, default_value = "9186", help = "the port this exporter listens on")]
     port: u16,
+    #[arg(short = 'f', long, help = "only track processes containing substring in comm")]
+    filter: Option<u16>,
 }
 
 fn main() -> Result<()> {
@@ -360,6 +362,15 @@ fn main() -> Result<()> {
 
         let processes = procfs::process::all_processes().context("failed to list pids")?;
         for process in processes.flatten() {
+            if let Some(filter) = args.filter {
+                if let Ok(stat) = process.stat() {
+                    if !stat.comm.contains(&filter.to_string()) {
+                        continue
+                    }
+                } else {
+                    continue
+                }
+            }
             let pid = process.pid;
             debug!("send delay request for pid {}", pid);
             send_delay_request(&socket, family_id, pid as u32)?;
