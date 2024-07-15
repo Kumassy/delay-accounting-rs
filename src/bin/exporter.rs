@@ -281,7 +281,7 @@ struct Args {
     #[arg(short = 'p', long, default_value = "9186", help = "the port this exporter listens on")]
     port: u16,
     #[arg(short = 'f', long, help = "only track processes containing substring in comm")]
-    filter: Option<u16>,
+    filter: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -362,7 +362,7 @@ fn main() -> Result<()> {
 
         let processes = procfs::process::all_processes().context("failed to list pids")?;
         for process in processes.flatten() {
-            if let Some(filter) = args.filter {
+            if let Some(ref filter) = args.filter {
                 if let Ok(stat) = process.stat() {
                     if !stat.comm.contains(&filter.to_string()) {
                         continue
